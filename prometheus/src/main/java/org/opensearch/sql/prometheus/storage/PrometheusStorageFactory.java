@@ -9,12 +9,6 @@ package org.opensearch.sql.prometheus.storage;
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import okhttp3.OkHttpClient;
 import org.opensearch.sql.datasource.model.DataSource;
 import org.opensearch.sql.datasource.model.DataSourceMetadata;
@@ -26,6 +20,13 @@ import org.opensearch.sql.prometheus.client.PrometheusClient;
 import org.opensearch.sql.prometheus.client.PrometheusClientImpl;
 import org.opensearch.sql.storage.DataSourceFactory;
 import org.opensearch.sql.storage.StorageEngine;
+
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public class PrometheusStorageFactory implements DataSourceFactory {
 
@@ -79,7 +80,7 @@ public class PrometheusStorageFactory implements DataSourceFactory {
         okHttpClient.addInterceptor(new AwsSigningInterceptor(
             new AWSStaticCredentialsProvider(
                 new BasicAWSCredentials(config.get(ACCESS_KEY), config.get(SECRET_KEY))),
-            config.get(REGION), "aps"));
+            config.get(REGION), "monitoring"));
       } else {
         throw new IllegalArgumentException(
             String.format("AUTH Type : %s is not supported with Prometheus Connector",

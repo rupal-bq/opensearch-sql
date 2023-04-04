@@ -8,16 +8,6 @@
 
 package org.opensearch.sql.prometheus.request.system;
 
-import static org.opensearch.sql.data.model.ExprValueUtils.stringValue;
-
-import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 import lombok.NonNull;
 import lombok.ToString;
 import org.apache.logging.log4j.LogManager;
@@ -29,6 +19,17 @@ import org.opensearch.sql.data.type.ExprCoreType;
 import org.opensearch.sql.data.type.ExprType;
 import org.opensearch.sql.prometheus.client.PrometheusClient;
 import org.opensearch.sql.prometheus.storage.PrometheusMetricDefaultSchema;
+
+import java.io.IOException;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.opensearch.sql.data.model.ExprValueUtils.stringValue;
 
 /**
  * Describe Metric metadata request.
@@ -103,8 +104,14 @@ public class PrometheusDescribeMetricRequest implements PrometheusSystemRequest 
                              DataSourceSchemaName dataSourceSchemaName) {
     LinkedHashMap<String, ExprValue> valueMap = new LinkedHashMap<>();
     valueMap.put("TABLE_CATALOG", stringValue(dataSourceSchemaName.getDataSourceName()));
-    valueMap.put("TABLE_SCHEMA", stringValue(dataSourceSchemaName.getSchemaName()));
-    valueMap.put("TABLE_NAME", stringValue(metricName));
+    if(metricName.contains(".")) {
+      String[] str = metricName.split("[.]",0);
+      valueMap.put("TABLE_SCHEMA", stringValue(str[0].replace("-", "/")));
+      valueMap.put("TABLE_NAME", stringValue(str[1]));
+    } else {
+      valueMap.put("TABLE_SCHEMA", stringValue(dataSourceSchemaName.getSchemaName()));
+      valueMap.put("TABLE_NAME", stringValue(metricName));
+    }
     valueMap.put("COLUMN_NAME", stringValue(fieldName));
     valueMap.put("DATA_TYPE", stringValue(fieldType));
     return new ExprTupleValue(valueMap);

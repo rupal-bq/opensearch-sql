@@ -11,16 +11,17 @@ import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.babbel.mobile.android.commons.okhttpawssigner.OkHttpAwsV4Signer;
-import java.io.IOException;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import lombok.NonNull;
 import okhttp3.Interceptor;
 import okhttp3.Request;
 import okhttp3.Response;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import java.io.IOException;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class AwsSigningInterceptor implements Interceptor {
 
@@ -54,7 +55,8 @@ public class AwsSigningInterceptor implements Interceptor {
 
     Request.Builder newRequestBuilder = request.newBuilder()
         .addHeader("x-amz-date", timestampFormat.format(ZonedDateTime.now()))
-        .addHeader("host", request.url().host());
+        .addHeader("host", request.url().host())
+            .addHeader("Content-Encoding","amz-1.0");
 
     AWSCredentials awsCredentials = awsCredentialsProvider.getCredentials();
     if (awsCredentialsProvider instanceof STSAssumeRoleSessionCredentialsProvider) {

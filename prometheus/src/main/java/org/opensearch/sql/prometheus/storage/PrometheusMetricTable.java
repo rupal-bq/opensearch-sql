@@ -6,11 +6,6 @@
 
 package org.opensearch.sql.prometheus.storage;
 
-import static org.opensearch.sql.prometheus.data.constants.PrometheusFieldConstants.LABELS;
-
-import java.util.HashMap;
-import java.util.Map;
-import javax.annotation.Nonnull;
 import lombok.Getter;
 import org.opensearch.sql.data.type.ExprCoreType;
 import org.opensearch.sql.data.type.ExprType;
@@ -22,6 +17,12 @@ import org.opensearch.sql.prometheus.request.PrometheusQueryRequest;
 import org.opensearch.sql.prometheus.request.system.PrometheusDescribeMetricRequest;
 import org.opensearch.sql.prometheus.storage.implementor.PrometheusDefaultImplementor;
 import org.opensearch.sql.storage.Table;
+
+import javax.annotation.Nonnull;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.opensearch.sql.prometheus.data.constants.PrometheusFieldConstants.LABELS;
 
 /**
  * Prometheus table (metric) implementation.
@@ -94,7 +95,7 @@ public class PrometheusMetricTable implements Table {
   @Override
   public PhysicalPlan implement(LogicalPlan plan) {
     PrometheusMetricScan metricScan =
-        new PrometheusMetricScan(prometheusClient);
+        new PrometheusMetricScan(prometheusClient, metricName);
     if (prometheusQueryRequest != null) {
       metricScan.setRequest(prometheusQueryRequest);
       metricScan.setIsQueryRangeFunctionScan(Boolean.TRUE);

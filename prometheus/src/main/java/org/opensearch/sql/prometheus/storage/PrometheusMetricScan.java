@@ -5,10 +5,6 @@
 
 package org.opensearch.sql.prometheus.storage;
 
-import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
-import java.util.Iterator;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
@@ -22,6 +18,11 @@ import org.opensearch.sql.prometheus.request.PrometheusQueryRequest;
 import org.opensearch.sql.prometheus.response.PrometheusResponse;
 import org.opensearch.sql.prometheus.storage.model.PrometheusResponseFieldNames;
 import org.opensearch.sql.storage.TableScanOperator;
+
+import java.io.IOException;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.util.Iterator;
 
 /**
  * Prometheus metric scan operator.
@@ -47,6 +48,8 @@ public class PrometheusMetricScan extends TableScanOperator {
   @Setter
   private PrometheusResponseFieldNames prometheusResponseFieldNames;
 
+  @Setter
+  private String metricName;
 
   private static final Logger LOG = LogManager.getLogger();
 
@@ -55,8 +58,9 @@ public class PrometheusMetricScan extends TableScanOperator {
    *
    * @param prometheusClient prometheusClient.
    */
-  public PrometheusMetricScan(PrometheusClient prometheusClient) {
+  public PrometheusMetricScan(PrometheusClient prometheusClient, String metricName) {
     this.prometheusClient = prometheusClient;
+    this.metricName = metricName;
     this.request = new PrometheusQueryRequest();
     this.prometheusResponseFieldNames = new PrometheusResponseFieldNames();
   }
@@ -68,7 +72,7 @@ public class PrometheusMetricScan extends TableScanOperator {
       try {
         JSONObject responseObject = prometheusClient.queryRange(
             request.getPromQl(),
-            request.getStartTime(), request.getEndTime(), request.getStep());
+            request.getStartTime(), request.getEndTime(), request.getStep(), metricName);
         return new PrometheusResponse(responseObject, prometheusResponseFieldNames,
             isQueryRangeFunctionScan).iterator();
       } catch (IOException e) {

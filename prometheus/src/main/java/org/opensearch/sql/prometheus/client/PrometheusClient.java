@@ -5,17 +5,17 @@
 
 package org.opensearch.sql.prometheus.client;
 
+import org.json.JSONObject;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import org.json.JSONObject;
-import org.opensearch.sql.prometheus.request.system.model.MetricMetadata;
 
 public interface PrometheusClient {
 
-  JSONObject queryRange(String query, Long start, Long end, String step) throws IOException;
+  JSONObject queryRange(String query, Long start, Long end, String step, String metricName) throws IOException;
 
   List<String> getLabels(String metricName) throws IOException;
 
-  Map<String, List<MetricMetadata>> getAllMetrics() throws IOException;
+  List<Map<String, String>> getAllMetrics() throws IOException;
 }

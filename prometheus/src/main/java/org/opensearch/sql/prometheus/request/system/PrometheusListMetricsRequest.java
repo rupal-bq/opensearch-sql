@@ -7,7 +7,13 @@
 
 package org.opensearch.sql.prometheus.request.system;
 
-import static org.opensearch.sql.data.model.ExprValueUtils.stringValue;
+import lombok.RequiredArgsConstructor;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.opensearch.sql.DataSourceSchemaName;
+import org.opensearch.sql.data.model.ExprTupleValue;
+import org.opensearch.sql.data.model.ExprValue;
+import org.opensearch.sql.prometheus.client.PrometheusClient;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -16,14 +22,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.opensearch.sql.DataSourceSchemaName;
-import org.opensearch.sql.data.model.ExprTupleValue;
-import org.opensearch.sql.data.model.ExprValue;
-import org.opensearch.sql.prometheus.client.PrometheusClient;
-import org.opensearch.sql.prometheus.request.system.model.MetricMetadata;
+
+import static org.opensearch.sql.data.model.ExprValueUtils.stringValue;
 
 @RequiredArgsConstructor
 public class PrometheusListMetricsRequest implements PrometheusSystemRequest {
@@ -39,13 +39,11 @@ public class PrometheusListMetricsRequest implements PrometheusSystemRequest {
   public List<ExprValue> search() {
     return AccessController.doPrivileged((PrivilegedAction<List<ExprValue>>) () -> {
       try {
-        Map<String, List<MetricMetadata>> result = prometheusClient.getAllMetrics();
-        return result.keySet()
+        List<Map<String, String>> result = prometheusClient.getAllMetrics();
+        return result
             .stream()
             .map(x -> {
-              MetricMetadata metricMetadata = result.get(x).get(0);
-              return row(x, metricMetadata.getType(),
-                  metricMetadata.getUnit(), metricMetadata.getHelp());
+              return row(x);
             })
             .collect(Collectors.toList());
       } catch (IOException e) {
@@ -58,14 +56,11 @@ public class PrometheusListMetricsRequest implements PrometheusSystemRequest {
 
   }
 
-  private ExprTupleValue row(String metricName, String tableType, String unit, String help) {
+  private ExprTupleValue row(Map<String, String> metric) {
     LinkedHashMap<String, ExprValue> valueMap = new LinkedHashMap<>();
     valueMap.put("TABLE_CATALOG", stringValue(dataSourceSchemaName.getDataSourceName()));
-    valueMap.put("TABLE_SCHEMA", stringValue("default"));
-    valueMap.put("TABLE_NAME", stringValue(metricName));
-    valueMap.put("TABLE_TYPE", stringValue(tableType));
-    valueMap.put("UNIT", stringValue(unit));
-    valueMap.put("REMARKS", stringValue(help));
+    valueMap.put("TABLE_NAMESPACE", stringValue(metric.get("Namespace")));
+    valueMap.put("TABLE_NAME", stringValue(metric.get("MetricName")));
     return new ExprTupleValue(valueMap);
   }
 }
