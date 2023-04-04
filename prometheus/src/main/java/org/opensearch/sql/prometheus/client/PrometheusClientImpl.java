@@ -43,7 +43,7 @@ public class PrometheusClientImpl implements PrometheusClient {
     String queryUrl = "https://monitoring.us-west-2.amazonaws.com";
     logger.debug("queryUrl: " + queryUrl);
     MediaType JSON = MediaType.parse("application/json; charset=utf-8");
-    RequestBody body = RequestBody.create(JSON, getJsonBody(metricName, query).toString());
+    RequestBody body = RequestBody.create(JSON, getJsonBody(metricName, query, start, end).toString());
     Request request = new Request.Builder()
             .url(queryUrl)
             .post(body)
@@ -56,7 +56,7 @@ public class PrometheusClientImpl implements PrometheusClient {
 
   private JSONObject updateQueryResponse(JSONObject jsonObject, String query){
     JSONObject result = jsonObject.getJSONArray("MetricDataResults").getJSONObject(0);
-    if(query != null) {
+    if(query != null && query.contains("{")) {
       String[] tmp = query.substring(query.indexOf('{')+1, query.indexOf('}')).split(",");
       for(String str: tmp) {
         String[] map = str.split("=");
@@ -152,10 +152,10 @@ public class PrometheusClientImpl implements PrometheusClient {
     }
     return metric;
   }
-  private JSONObject getJsonBody(String metricName, String query){
+  private JSONObject getJsonBody(String metricName, String query, Long start, Long end){
 
     JSONArray dimensions = new JSONArray();
-    if(query != null) {
+    if(query != null && query.contains("{")) {
       String[] tmp = query.substring(query.indexOf('{')+1, query.indexOf('}')).split(",");
 
       for(String str: tmp) {
@@ -196,8 +196,8 @@ public class PrometheusClientImpl implements PrometheusClient {
     JSONObject jsonBody = new JSONObject();
     try {
       jsonBody.put("MetricDataQueries", metricDataQueries);
-      jsonBody.put("StartTime", 1674950400);
-      jsonBody.put("EndTime", 1680048000);
+      jsonBody.put("StartTime", start);
+      jsonBody.put("EndTime", end);
 
     } catch (JSONException e) {
       e.printStackTrace();
