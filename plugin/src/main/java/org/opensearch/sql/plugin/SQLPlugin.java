@@ -5,16 +5,8 @@
 
 package org.opensearch.sql.plugin;
 
-import static org.opensearch.sql.datasource.model.DataSourceMetadata.defaultOpenSearchDataSourceMetadata;
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.function.Supplier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.action.ActionRequest;
@@ -46,6 +38,7 @@ import org.opensearch.rest.RestHandler;
 import org.opensearch.script.ScriptContext;
 import org.opensearch.script.ScriptEngine;
 import org.opensearch.script.ScriptService;
+import org.opensearch.sql.cloudwatch.storage.CloudWatchStorageFactory;
 import org.opensearch.sql.common.encryptor.EncryptorImpl;
 import org.opensearch.sql.datasource.DataSourceMetadataStorage;
 import org.opensearch.sql.datasource.DataSourceService;
@@ -81,6 +74,15 @@ import org.opensearch.threadpool.ExecutorBuilder;
 import org.opensearch.threadpool.FixedExecutorBuilder;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.watcher.ResourceWatcherService;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Supplier;
+
+import static org.opensearch.sql.datasource.model.DataSourceMetadata.defaultOpenSearchDataSourceMetadata;
 
 public class SQLPlugin extends Plugin implements ActionPlugin, ScriptPlugin {
 
@@ -168,6 +170,7 @@ public class SQLPlugin extends Plugin implements ActionPlugin, ScriptPlugin {
                 .add(new OpenSearchDataSourceFactory(
                     new OpenSearchNodeClient(this.client), pluginSettings))
                 .add(new PrometheusStorageFactory())
+                .add(new CloudWatchStorageFactory())
                 .build(),
             dataSourceMetadataStorage,
             dataSourceUserAuthorizationHelper);

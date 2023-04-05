@@ -7,6 +7,7 @@ package org.opensearch.sql.datasource.model;
 
 public enum DataSourceType {
   PROMETHEUS("prometheus"),
+  CLOUDWATCH("cloudwatch"),
   OPENSEARCH("opensearch"),
   JDBC("jdbc");
 
