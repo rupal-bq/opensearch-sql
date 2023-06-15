@@ -16,6 +16,8 @@ repositories {
 dependencies {
     api project(':core')
     implementation project(':datasources')
+    implementation group: 'org.json', name: 'json', version: '20230227'
+    implementation group: 'com.amazonaws', name: 'aws-java-sdk-emr', version: '1.12.1'
 }
 
 test {
@@ -44,7 +46,7 @@ jacocoTestCoverageVerification {
         rule {
             element = 'CLASS'
             excludes = [
-                    'org.opensearch.sql.prometheus.data.constants.*'
+                    'org.opensearch.sql.spark.data.constants.*'
             ]
             limit {
                 counter = 'LINE'

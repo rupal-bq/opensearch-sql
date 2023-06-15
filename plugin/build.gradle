@@ -125,6 +125,7 @@ dependencies {
     api project(':legacy')
     api project(':opensearch')
     api project(':prometheus')
+    api project(':spark')
     api project(':datasources')
 
     testImplementation group: 'net.bytebuddy', name: 'byte-buddy-agent', version: '1.12.13'
