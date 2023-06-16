@@ -3,6 +3,6 @@ package org.opensearch.sql.spark.client;
 import java.io.IOException;
 import org.json.JSONObject;
 
-public interface EMRClient {
+public interface SparkClient {
     JSONObject sql(String query) throws IOException;
 }

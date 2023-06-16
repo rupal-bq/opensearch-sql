@@ -5,6 +5,7 @@ import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.datasource.model.DataSource;
 import org.opensearch.sql.datasource.model.DataSourceMetadata;
 import org.opensearch.sql.datasource.model.DataSourceType;
+import org.opensearch.sql.spark.client.SparkClient;
 import org.opensearch.sql.spark.client.EMRClientImpl;
 import org.opensearch.sql.storage.DataSourceFactory;
 import org.opensearch.sql.storage.StorageEngine;
@@ -45,8 +46,8 @@ public class SparkDataSourceFactory implements DataSourceFactory {
   }
 
   StorageEngine getStorageEngine(Map<String, String> requiredConfig) {
-    /*EMRClient sparkClient;
-    sparkClient = AccessController.doPrivileged(PrivilegedAction<EMRClientImpl>) () -> {
+    SparkClient sparkClient = new EMRClientImpl();
+    /*sparkClient = AccessController.doPrivileged(PrivilegedAction<EMRClientImpl>) () -> {
       try {
         validateDataSourceConfigProperties(requiredConfig);
         return new EMRClientImpl();
@@ -54,6 +55,6 @@ public class SparkDataSourceFactory implements DataSourceFactory {
         throw new IllegalArgumentException(e.getMessage());
       }
     });*/
-    return new SparkDataSourceEngine(new EMRClientImpl());
+    return new SparkDataSourceEngine(sparkClient);
   }
 }

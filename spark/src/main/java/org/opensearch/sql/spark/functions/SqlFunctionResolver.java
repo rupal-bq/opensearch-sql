@@ -1,6 +1,5 @@
 package org.opensearch.sql.spark.functions;
 
-import static org.opensearch.sql.data.type.ExprCoreType.STRING;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -11,7 +10,7 @@ import org.opensearch.sql.expression.function.FunctionBuilder;
 import org.opensearch.sql.expression.function.FunctionName;
 import org.opensearch.sql.expression.function.FunctionResolver;
 import org.opensearch.sql.expression.function.FunctionSignature;
-import org.opensearch.sql.spark.client.EMRClient;
+import org.opensearch.sql.spark.client.SparkClient;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -19,10 +18,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.opensearch.sql.data.type.ExprCoreType.STRING;
+
 @RequiredArgsConstructor
 public class SqlFunctionResolver implements FunctionResolver {
 
-    private final EMRClient emrClient;
+    private final SparkClient sparkClient;
     public static final String SQL = "sql";
     public static final String QUERY = "query";
 
@@ -53,10 +54,10 @@ public class SqlFunctionResolver implements FunctionResolver {
                     namedArguments.add(new NamedArgumentExpression(argumentNames.get(i),
                             ((NamedArgumentExpression) arguments.get(i)).getValue()));
                 }
-                return new SqlFunctionImplementation(functionName, namedArguments, emrClient);
+                return new SqlFunctionImplementation(functionName, namedArguments, sparkClient);
             }
-            return new SqlFunctionImplementation(functionName, arguments, emrClient);
-        };
+            return new SqlFunctionImplementation(functionName, arguments, sparkClient);
+        });
         return Pair.of(functionSignature, functionBuilder);
     }
 
@@ -78,6 +79,6 @@ public class SqlFunctionResolver implements FunctionResolver {
 
     @Override
     public FunctionName getFunctionName() {
-        return null;
+        return FunctionName.of(SQL);
     }
 }

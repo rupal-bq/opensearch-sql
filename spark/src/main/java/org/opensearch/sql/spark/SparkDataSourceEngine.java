@@ -3,7 +3,7 @@ package org.opensearch.sql.spark;
 import lombok.RequiredArgsConstructor;
 import org.opensearch.sql.DataSourceSchemaName;
 import org.opensearch.sql.expression.function.FunctionResolver;
-import org.opensearch.sql.spark.client.EMRClient;
+import org.opensearch.sql.spark.client.SparkClient;
 import org.opensearch.sql.spark.functions.SqlFunctionResolver;
 import org.opensearch.sql.storage.StorageEngine;
 import org.opensearch.sql.storage.Table;
@@ -14,7 +14,7 @@ import java.util.Collections;
 @RequiredArgsConstructor
 public class SparkDataSourceEngine implements StorageEngine {
 
-    private final EMRClient emrClient;
+    private final SparkClient sparkClient;
 
     @Override
     public Table getTable(DataSourceSchemaName dataSourceSchemaName, String tableName) {
@@ -24,7 +24,6 @@ public class SparkDataSourceEngine implements StorageEngine {
     @Override
     public Collection<FunctionResolver> getFunctions() {
         return Collections.singletonList(
-                new SqlFunctionResolver(emrClient);
-        )
+                new SqlFunctionResolver(sparkClient));
     }
 }

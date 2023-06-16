@@ -12,7 +12,7 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 
-public class EMRClientImpl implements EMRClient{
+public class EMRClientImpl implements SparkClient {
 
     private static final Logger logger = LogManager.getLogger(EMRClientImpl.class);
     public EMRClientImpl() {
