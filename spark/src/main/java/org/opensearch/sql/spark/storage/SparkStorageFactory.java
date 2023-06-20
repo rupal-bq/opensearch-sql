@@ -8,6 +8,7 @@
 package org.opensearch.sql.spark.storage;
 
 import lombok.RequiredArgsConstructor;
+import org.opensearch.client.Client;
 import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.datasource.model.DataSource;
 import org.opensearch.sql.datasource.model.DataSourceMetadata;
@@ -24,15 +25,15 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class SparkStorageFactory implements DataSourceFactory {
 
-  public static final String CLUSTER = "emr.cluster";
+  private final Client client;
+  private final Settings settings;
+  public static final String EMR_CLUSTER = "emr.cluster";
+  public static final String OPENSEARCH_DOMAIN_ENDPOINT = "opensearch.domain";
   public static final String AUTH_TYPE = "emr.auth.type";
   public static final String REGION = "emr.auth.region";
   public static final String ROLE_ARN = "emr.auth.role_arn";
   public static final String ACCESS_KEY = "emr.auth.access_key";
   public static final String SECRET_KEY = "emr.auth.secret_key";
-  private static final Integer MAX_LENGTH_FOR_CONFIG_PROPERTY = 1000;
-
-  private final Settings settings;
 
   @Override
   public DataSourceType getDataSourceType() {
@@ -52,10 +53,11 @@ public class SparkStorageFactory implements DataSourceFactory {
   private void validateDataSourceConfigProperties(Map<String, String> dataSourceMetadataConfig)
       throws IllegalArgumentException {
     // TODO Update validation
-    if(dataSourceMetadataConfig.get(CLUSTER) == null
+    if(dataSourceMetadataConfig.get(EMR_CLUSTER) == null
             && dataSourceMetadataConfig.get(AUTH_TYPE) == null
             && dataSourceMetadataConfig.get(REGION) == null
-            && dataSourceMetadataConfig.get(ROLE_ARN) == null)
+            && dataSourceMetadataConfig.get(ROLE_ARN) == null
+            && dataSourceMetadataConfig.get(OPENSEARCH_DOMAIN_ENDPOINT) == null)
       throw new IllegalArgumentException("Cluster missing");
   }
 
@@ -65,7 +67,13 @@ public class SparkStorageFactory implements DataSourceFactory {
         AccessController.doPrivileged((PrivilegedAction<SparkClientImpl>) () -> {
           try {
             validateDataSourceConfigProperties(requiredConfig);
-            return new SparkClientImpl(requiredConfig.get(CLUSTER), requiredConfig.get(REGION), requiredConfig.get(ACCESS_KEY), requiredConfig.get(SECRET_KEY));
+            return new SparkClientImpl(
+                    client,
+                    requiredConfig.get(EMR_CLUSTER),
+                    requiredConfig.get(REGION),
+                    requiredConfig.get(ACCESS_KEY),
+                    requiredConfig.get(SECRET_KEY),
+                    requiredConfig.get(OPENSEARCH_DOMAIN_ENDPOINT));
           } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException(
                 String.format("Invalid cluster in spark properties: %s", e.getMessage()));

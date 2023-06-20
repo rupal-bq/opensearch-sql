@@ -5,24 +5,23 @@
 
 package org.opensearch.sql.spark.functions.response;
 
-import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.VALUE;
+import org.jetbrains.annotations.NotNull;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.opensearch.sql.data.model.ExprFloatValue;
+import org.opensearch.sql.data.model.ExprIntegerValue;
+import org.opensearch.sql.data.model.ExprLongValue;
+import org.opensearch.sql.data.model.ExprStringValue;
+import org.opensearch.sql.data.model.ExprTupleValue;
+import org.opensearch.sql.data.model.ExprValue;
+import org.opensearch.sql.data.type.ExprCoreType;
+import org.opensearch.sql.data.type.ExprType;
+import org.opensearch.sql.executor.ExecutionEngine;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import org.jetbrains.annotations.NotNull;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import org.opensearch.sql.data.model.ExprDoubleValue;
-import org.opensearch.sql.data.model.ExprStringValue;
-import org.opensearch.sql.data.model.ExprTimestampValue;
-import org.opensearch.sql.data.model.ExprTupleValue;
-import org.opensearch.sql.data.model.ExprValue;
-import org.opensearch.sql.data.type.ExprCoreType;
-import org.opensearch.sql.executor.ExecutionEngine;
-import org.opensearch.sql.spark.data.constants.SparkFieldConstants;
 
 /**
  * Default implementation of SqlFunctionResponseHandle.
@@ -45,60 +44,81 @@ public class DefaultSqlFunctionResponseHandle implements SqlFunctionResponseHand
 
   private void constructIteratorAndSchema() {
     List<ExprValue> result = new ArrayList<>();
-    List<ExecutionEngine.Schema.Column> columnList = new ArrayList<>();
-    if ("matrix".equals(responseObject.getString("resultType"))) {
-      JSONArray itemArray = responseObject.getJSONArray("result");
-      for (int i = 0; i < itemArray.length(); i++) {
-        JSONObject item = itemArray.getJSONObject(i);
-        JSONObject metric = item.getJSONObject("metric");
-        JSONArray values = item.getJSONArray("values");
-        if (i == 0) {
-          columnList = getColumnList(metric);
-        }
-        for (int j = 0; j < values.length(); j++) {
-          LinkedHashMap<String, ExprValue> linkedHashMap =
-              extractRow(metric, values.getJSONArray(j), columnList);
-          result.add(new ExprTupleValue(linkedHashMap));
-        }
+    List<ExecutionEngine.Schema.Column> columnList;
+    if (responseObject.has("data")) {
+      JSONObject items = responseObject.getJSONObject("data");
+      columnList = getColumnList(items.getJSONArray("schema"));
+      for(int i=0; i<items.getJSONArray("result").length(); i++){
+        JSONObject row = new JSONObject(items.getJSONArray("result").get(i).toString().replace("'", "\""));
+        LinkedHashMap<String, ExprValue> linkedHashMap = extractRow(row, columnList);
+        result.add(new ExprTupleValue(linkedHashMap));
       }
     } else {
-      throw new RuntimeException(String.format("Unexpected Result Type: %s during Spark "
-              + "Response Parsing. 'matrix' resultType is expected",
-          responseObject.getString("resultType")));
+      throw new RuntimeException("Unexpected result during spark sql query execution");
     }
     this.schema = new ExecutionEngine.Schema(columnList);
     this.responseIterator = result.iterator();
   }
 
   @NotNull
-  private static LinkedHashMap<String, ExprValue> extractRow(JSONObject metric,
-         JSONArray values, List<ExecutionEngine.Schema.Column> columnList) {
+  private static LinkedHashMap<String, ExprValue> extractRow(JSONObject row, List<ExecutionEngine.Schema.Column> columnList) {
     LinkedHashMap<String, ExprValue> linkedHashMap = new LinkedHashMap<>();
     for (ExecutionEngine.Schema.Column column : columnList) {
-      if (SparkFieldConstants.TIMESTAMP.equals(column.getName())) {
-        linkedHashMap.put(SparkFieldConstants.TIMESTAMP,
-            new ExprTimestampValue(Instant.ofEpochMilli((long) (values.getDouble(0) * 1000))));
-      } else if (column.getName().equals(VALUE)) {
-        linkedHashMap.put(VALUE, new ExprDoubleValue(values.getDouble(1)));
+      ExprType type = column.getExprType();
+      if(type == ExprCoreType.STRING)
+        linkedHashMap.put(column.getName(), new ExprStringValue(row.getString(column.getName())));
+      else if(type == ExprCoreType.INTEGER) {
+        linkedHashMap.put(column.getName(), new ExprIntegerValue(row.getInt(column.getName())));
+      } else if(type == ExprCoreType.FLOAT) {
+        linkedHashMap.put(column.getName(), new ExprFloatValue(row.getFloat(column.getName())));
+      } else if(type == ExprCoreType.LONG) {
+        linkedHashMap.put(column.getName(), new ExprLongValue(row.getLong(column.getName())));
       } else {
-        linkedHashMap.put(column.getName(),
-            new ExprStringValue(metric.getString(column.getName())));
+        throw new RuntimeException("Invalid data type");
       }
     }
     return linkedHashMap;
   }
 
 
-  private List<ExecutionEngine.Schema.Column> getColumnList(JSONObject metric) {
+  private List<ExecutionEngine.Schema.Column> getColumnList(JSONArray schema) {
     List<ExecutionEngine.Schema.Column> columnList = new ArrayList<>();
-    columnList.add(new ExecutionEngine.Schema.Column(SparkFieldConstants.TIMESTAMP,
-        SparkFieldConstants.TIMESTAMP, ExprCoreType.TIMESTAMP));
-    columnList.add(new ExecutionEngine.Schema.Column(VALUE, VALUE, ExprCoreType.DOUBLE));
-    for (String key : metric.keySet()) {
-      columnList.add(new ExecutionEngine.Schema.Column(key, key, ExprCoreType.STRING));
+    for(int i=0; i<schema.length(); i++) {
+      JSONObject column = new JSONObject(schema.get(i).toString().replace("'", "\""));
+      columnList.add(new ExecutionEngine.Schema.Column(column.get("column_name").toString(), column.get("column_name").toString(), getDataType(column.get("data_type").toString())));
     }
     return columnList;
   }
+
+  private ExprCoreType getDataType(String sparkDataType) {
+    switch (sparkDataType) {
+      case "integer":
+        return ExprCoreType.INTEGER;
+      case "byte":
+        return ExprCoreType.BYTE;
+      case "short":
+        return ExprCoreType.SHORT;
+      case "long":
+        return ExprCoreType.LONG;
+      case "float":
+        return ExprCoreType.FLOAT;
+      case "double":
+        return ExprCoreType.DOUBLE;
+      case "boolean":
+        return ExprCoreType.BOOLEAN;
+      case "date":
+        return ExprCoreType.DATE;
+      case "timestamp":
+        return ExprCoreType.TIMESTAMP;
+      case "string":
+      case "varchar":
+      case "char":
+      default:
+        return ExprCoreType.STRING;
+    }
+  }
+
+
 
   @Override
   public boolean hasNext() {

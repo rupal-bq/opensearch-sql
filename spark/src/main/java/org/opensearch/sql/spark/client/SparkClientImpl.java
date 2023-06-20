@@ -24,9 +24,15 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.opensearch.action.ActionFuture;
 import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.client.Client;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.sql.spark.request.system.model.MetricMetadata;
 
 import java.io.IOException;
@@ -43,22 +49,26 @@ public class SparkClientImpl implements SparkClient {
 
   private static final Logger logger = LogManager.getLogger(SparkClientImpl.class);
 
-  private final String cluster;
+  private final Client client;
+  private final String emrCluster;
   private final String accessKey;
   private final String secretKey;
   private final String region;
+  private final String opensearchDomainEndpoint;
 
-  public SparkClientImpl(String cluster, String region, String accessKey, String secretKey) {
-    this.cluster = cluster;
+  public SparkClientImpl(Client client, String cluster, String region, String accessKey, String secretKey, String opensearchDomainEndpoint) {
+    this.client = client;
+    this.emrCluster = cluster;
     this.region = region;
     this.accessKey = accessKey;
     this.secretKey = secretKey;
+    this.opensearchDomainEndpoint = opensearchDomainEndpoint;
   }
 
   @Override
   public JSONObject sql(String query) throws IOException {
-    runEmrApplication(query);
-    return getResultFromOpensearchIndex();
+    String stepId = runEmrApplication(query);
+    return getResultFromOpensearchIndex(stepId);
   }
 
   @Override
@@ -88,7 +98,7 @@ public class SparkClientImpl implements SparkClient {
     return result;
   }
 
-  private void runEmrApplication(String query) {
+  private String runEmrApplication(String query) {
     AmazonElasticMapReduce emrClient = AmazonElasticMapReduceClientBuilder.standard()
             .withCredentials(new AWSStaticCredentialsProvider(new BasicAWSCredentials(accessKey, secretKey)))
             .withRegion(Regions.US_WEST_2)
@@ -102,8 +112,7 @@ public class SparkClientImpl implements SparkClient {
                     SPARK_APPLICATION_JAR,
                     query,
                     SPARK_INDEX_NAME,
-                    //TODO get public domain endpoint
-                    "search-test-for-fidelity-fcmtzib4plbqyh4kbkmurk6acu.us-west-2.es.amazonaws.com",
+                    opensearchDomainEndpoint,
                     "-1",
                     "https",
                     "sigv4",
@@ -115,19 +124,18 @@ public class SparkClientImpl implements SparkClient {
             .withActionOnFailure(ActionOnFailure.CONTINUE)
             .withHadoopJarStep(stepConfig);
 
-    //String clusterId = "j-23PYT6MNJB8AY";
-
     AddJobFlowStepsRequest request = new AddJobFlowStepsRequest()
-            .withJobFlowId(cluster)
+            .withJobFlowId(emrCluster)
             .withSteps(emrstep);
 
     AddJobFlowStepsResult result = emrClient.addJobFlowSteps(request);
-    System.out.println("Spark application step submitted successfully. Step IDs: " + result.getStepIds());
+    logger.debug("Spark application step IDs: " + result.getStepIds());
 
+    String stepId = result.getStepIds().get(0);
     // Create the DescribeStepRequest
     DescribeStepRequest stepRequest = new DescribeStepRequest()
-            .withClusterId(cluster)
-            .withStepId(result.getStepIds().get(0));
+            .withClusterId(emrCluster)
+            .withStepId(stepId);
 
     // Wait for the step to complete
     boolean completed = false;
@@ -135,18 +143,17 @@ public class SparkClientImpl implements SparkClient {
       // Get the step status
       DescribeStepResult stepResult = emrClient.describeStep(stepRequest);
       StepStatus statusDetail = stepResult.getStep().getStatus();
-      System.out.println("Current status: " + statusDetail.getState());
       // Check if the step has completed
       if (statusDetail.getState().equals("COMPLETED")) {
         completed = true;
-        System.out.println("Step completed successfully.");
+        logger.debug("EMR step completed successfully.");
       } else if (statusDetail.getState().equals("FAILED") || statusDetail.getState().equals("CANCELLED")) {
         completed = true;
-        System.out.println("Step failed or cancelled.");
+        logger.error("EMR step failed or cancelled.");
       } else {
         // Sleep for some time before checking the status again
         try {
-          Thread.sleep(5000);
+          Thread.sleep(2500);
         } catch (InterruptedException e) {
           e.printStackTrace();
         }
@@ -154,16 +161,34 @@ public class SparkClientImpl implements SparkClient {
     }
     // Close the EMR client
     emrClient.shutdown();
+    return stepId;
   }
 
-  private JSONObject getResultFromOpensearchIndex() {
-    return searchInSparkIndex(QueryBuilders.matchAllQuery());
+  private JSONObject getResultFromOpensearchIndex(String stepId) {
+    return searchInSparkIndex(QueryBuilders.termQuery("stepId.keyword", stepId));
   }
 
   private JSONObject searchInSparkIndex(QueryBuilder query) {
     SearchRequest searchRequest = new SearchRequest();
     searchRequest.indices(SPARK_INDEX_NAME);
-    // TODO: Get result from spark index
-    return new JSONObject();
+    SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+    searchSourceBuilder.query(query);
+    searchRequest.source(searchSourceBuilder);
+    ActionFuture<SearchResponse> searchResponseActionFuture;
+    try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext()
+            .stashContext()) {
+      searchResponseActionFuture = client.search(searchRequest);
+    }
+    SearchResponse searchResponse = searchResponseActionFuture.actionGet();
+    if (searchResponse.status().getStatus() != 200) {
+      throw new RuntimeException("Fetching result from .query_execution_result index failed with status : "
+              + searchResponse.status());
+    } else {
+      JSONObject data = new JSONObject();
+      for(SearchHit searchHit : searchResponse.getHits().getHits()) {
+        data.put("data", searchHit.getSourceAsMap());
+      }
+      return data;
+    }
   }
 }

@@ -223,7 +223,7 @@ public class SQLPlugin extends Plugin implements ActionPlugin, ScriptPlugin {
             .add(new OpenSearchDataSourceFactory(
                 new OpenSearchNodeClient(this.client), pluginSettings))
             .add(new PrometheusStorageFactory(pluginSettings))
-            .add(new SparkStorageFactory(pluginSettings))
+            .add(new SparkStorageFactory(this.client, pluginSettings))
             .build(),
         dataSourceMetadataStorage,
         dataSourceUserAuthorizationHelper);
