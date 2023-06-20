@@ -7,7 +7,6 @@
 package org.opensearch.sql.spark.storage;
 
 import lombok.Getter;
-import org.opensearch.sql.data.type.ExprCoreType;
 import org.opensearch.sql.data.type.ExprType;
 import org.opensearch.sql.planner.logical.LogicalPlan;
 import org.opensearch.sql.planner.physical.PhysicalPlan;
@@ -23,8 +22,6 @@ import javax.annotation.Nonnull;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.LABELS;
-
 /**
  * Spark table (metric) implementation.
  * This can be constructed from  a metric Name
@@ -35,33 +32,14 @@ public class SparkMetricTable implements Table {
   private final SparkClient sparkClient;
 
   @Getter
-  private final String metricName;
-
-  @Getter
   private final SparkQueryRequest sparkQueryRequest;
 
-
   /**
-   * The cached mapping of field and type in index.
-   */
-  private Map<String, ExprType> cachedFieldTypes = null;
-
-  /**
-   * Constructor only with metric name.
-   */
-  public SparkMetricTable(SparkClient sparkService, @Nonnull String metricName) {
-    this.sparkClient = sparkService;
-    this.metricName = metricName;
-    this.sparkQueryRequest = null;
-  }
-
-  /**
-   * Constructor for entire promQl Request.
+   * Constructor for entire Sql Request.
    */
   public SparkMetricTable(SparkClient sparkService,
                                @Nonnull SparkQueryRequest sparkQueryRequest) {
     this.sparkClient = sparkService;
-    this.metricName = null;
     this.sparkQueryRequest = sparkQueryRequest;
   }
 
@@ -79,12 +57,7 @@ public class SparkMetricTable implements Table {
 
   @Override
   public Map<String, ExprType> getFieldTypes() {
-    if (cachedFieldTypes == null) {
-      cachedFieldTypes = new HashMap<>(SparkMetricDefaultSchema.DEFAULT_MAPPING
-              .getMapping());
-      cachedFieldTypes.put(LABELS, ExprCoreType.STRING);
-    }
-    return cachedFieldTypes;
+    return new HashMap<>();
   }
 
   @Override
@@ -107,10 +80,6 @@ public class SparkMetricTable implements Table {
   //we need to move PPL implementations to ScanBuilder in future.
   @Override
   public TableScanBuilder createScanBuilder() {
-    if (metricName == null) {
-      return new SqlFunctionTableScanBuilder(sparkClient, sparkQueryRequest);
-    } else {
-      return null;
-    }
+    return new SqlFunctionTableScanBuilder(sparkClient, sparkQueryRequest);
   }
 }

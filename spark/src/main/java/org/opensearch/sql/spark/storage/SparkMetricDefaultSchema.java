@@ -7,23 +7,18 @@
 
 package org.opensearch.sql.spark.storage;
 
-import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.TIMESTAMP;
-import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.VALUE;
-
 import com.google.common.collect.ImmutableMap;
-import java.util.Map;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.opensearch.sql.data.type.ExprCoreType;
 import org.opensearch.sql.data.type.ExprType;
+
+import java.util.Map;
 
 @Getter
 @RequiredArgsConstructor
 public enum SparkMetricDefaultSchema {
 
   DEFAULT_MAPPING(new ImmutableMap.Builder<String, ExprType>()
-      .put(TIMESTAMP, ExprCoreType.TIMESTAMP)
-      .put(VALUE, ExprCoreType.DOUBLE)
       .build());
 
   private final Map<String, ExprType> mapping;
