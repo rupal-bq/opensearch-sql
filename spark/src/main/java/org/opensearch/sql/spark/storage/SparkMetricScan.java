@@ -16,7 +16,6 @@ import org.opensearch.sql.data.model.ExprValue;
 import org.opensearch.sql.spark.client.SparkClient;
 import org.opensearch.sql.spark.request.SparkQueryRequest;
 import org.opensearch.sql.spark.response.SparkResponse;
-import org.opensearch.sql.spark.storage.model.SparkResponseFieldNames;
 import org.opensearch.sql.storage.TableScanOperator;
 
 import java.io.IOException;
@@ -45,9 +44,6 @@ public class SparkMetricScan extends TableScanOperator {
   @Getter
   private Boolean isSqlFunctionScan = Boolean.FALSE;
 
-  @Setter
-  private SparkResponseFieldNames sparkResponseFieldNames;
-
 
   private static final Logger LOG = LogManager.getLogger();
 
@@ -59,7 +55,6 @@ public class SparkMetricScan extends TableScanOperator {
   public SparkMetricScan(SparkClient sparkClient) {
     this.sparkClient = sparkClient;
     this.request = new SparkQueryRequest();
-    this.sparkResponseFieldNames = new SparkResponseFieldNames();
   }
 
   @Override
@@ -69,8 +64,7 @@ public class SparkMetricScan extends TableScanOperator {
       try {
         JSONObject responseObject = sparkClient.sql(
             request.getSql());
-        return new SparkResponse(responseObject, sparkResponseFieldNames,
-            isSqlFunctionScan).iterator();
+        return new SparkResponse(responseObject).iterator();
       } catch (IOException e) {
         LOG.error(e.getMessage());
         throw new RuntimeException("Error fetching data from spark server. " + e.getMessage());
