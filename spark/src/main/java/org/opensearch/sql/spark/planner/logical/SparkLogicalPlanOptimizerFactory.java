@@ -6,12 +6,11 @@
 package org.opensearch.sql.spark.planner.logical;
 
 
-import java.util.Arrays;
 import lombok.experimental.UtilityClass;
 import org.opensearch.sql.planner.optimizer.LogicalPlanOptimizer;
 import org.opensearch.sql.spark.planner.logical.rules.MergeAggAndIndexScan;
-import org.opensearch.sql.spark.planner.logical.rules.MergeAggAndRelation;
-import org.opensearch.sql.spark.planner.logical.rules.MergeFilterAndRelation;
+
+import java.util.Arrays;
 
 /**
  * Spark storage engine specified logical plan optimizer.
@@ -24,9 +23,7 @@ public class SparkLogicalPlanOptimizerFactory {
    */
   public static LogicalPlanOptimizer create() {
     return new LogicalPlanOptimizer(Arrays.asList(
-        new MergeFilterAndRelation(),
-        new MergeAggAndIndexScan(),
-        new MergeAggAndRelation()
+        new MergeAggAndIndexScan()
     ));
   }
 }

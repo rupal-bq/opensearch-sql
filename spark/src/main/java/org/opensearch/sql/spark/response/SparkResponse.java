@@ -5,15 +5,6 @@
 
 package org.opensearch.sql.spark.response;
 
-import static org.opensearch.sql.data.type.ExprCoreType.INTEGER;
-import static org.opensearch.sql.data.type.ExprCoreType.LONG;
-import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.LABELS;
-
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
 import lombok.NonNull;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -28,6 +19,15 @@ import org.opensearch.sql.data.type.ExprType;
 import org.opensearch.sql.expression.NamedExpression;
 import org.opensearch.sql.expression.ReferenceExpression;
 import org.opensearch.sql.spark.storage.model.SparkResponseFieldNames;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+
+import static org.opensearch.sql.data.type.ExprCoreType.INTEGER;
+import static org.opensearch.sql.data.type.ExprCoreType.LONG;
 
 public class SparkResponse implements Iterable<ExprValue> {
 
@@ -83,11 +83,7 @@ public class SparkResponse implements Iterable<ExprValue> {
           // and each label is treated as a separate column where as in case of sql
           // function irrespective of promQL, the output structure is
           // @value, @timestamp, @labels [jsonfied string of all the labels for a data point]
-          if (isSqlFunctionScan) {
-            linkedHashMap.put(LABELS, new ExprStringValue(metric.toString()));
-          } else {
-            insertLabels(linkedHashMap, metric);
-          }
+          insertLabels(linkedHashMap, metric);
           result.add(new ExprTupleValue(linkedHashMap));
         }
       }
