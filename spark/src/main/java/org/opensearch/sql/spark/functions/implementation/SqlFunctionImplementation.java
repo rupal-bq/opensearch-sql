@@ -85,7 +85,7 @@ public class SqlFunctionImplementation extends FunctionExpression implements
       switch (argName) {
         case QUERY:
           sparkQueryRequest
-              .setPromQl((String) literalValue.value());
+              .setSql((String) literalValue.value());
           break;
         default:
           throw new ExpressionEvaluationException(

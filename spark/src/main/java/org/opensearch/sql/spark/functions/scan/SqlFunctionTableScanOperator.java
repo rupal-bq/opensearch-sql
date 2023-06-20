@@ -43,7 +43,7 @@ public class SqlFunctionTableScanOperator extends TableScanOperator {
     this.sparkResponseHandle
         = AccessController.doPrivileged((PrivilegedAction<SqlFunctionResponseHandle>) () -> {
           try {
-            JSONObject responseObject = sparkClient.sql(request.getPromQl());
+            JSONObject responseObject = sparkClient.sql(request.getSql());
             return new DefaultSqlFunctionResponseHandle(responseObject);
           } catch (IOException e) {
             LOG.error(e.getMessage());
@@ -70,11 +70,7 @@ public class SqlFunctionTableScanOperator extends TableScanOperator {
 
   @Override
   public String explain() {
-    return String.format(Locale.ROOT, "sql(%s, %s, %s, %s)",
-        request.getPromQl(),
-        request.getStartTime(),
-        request.getEndTime(),
-        request.getStep());
+    return String.format(Locale.ROOT, "sql(%s)", request.getSql());
   }
 
   @Override

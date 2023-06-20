@@ -94,7 +94,7 @@ public class SparkClientImpl implements SparkClient {
             .withSteps(emrstep);
 
     AddJobFlowStepsResult result = emrClient.addJobFlowSteps(request);
-    logger.debug("Spark application step IDs: " + result.getStepIds());
+    logger.info("Spark application step IDs: " + result.getStepIds());
 
     String stepId = result.getStepIds().get(0);
     // Create the DescribeStepRequest
@@ -111,7 +111,7 @@ public class SparkClientImpl implements SparkClient {
       // Check if the step has completed
       if (statusDetail.getState().equals("COMPLETED")) {
         completed = true;
-        logger.debug("EMR step completed successfully.");
+        logger.info("EMR step completed successfully.");
       } else if (statusDetail.getState().equals("FAILED") || statusDetail.getState().equals("CANCELLED")) {
         completed = true;
         logger.error("EMR step failed or cancelled.");

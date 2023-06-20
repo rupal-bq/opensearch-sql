@@ -9,9 +9,7 @@ package org.opensearch.sql.spark.request;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import lombok.ToString;
 
 /**
@@ -25,23 +23,8 @@ import lombok.ToString;
 public class SparkQueryRequest {
 
   /**
-   * PromQL.
+   * SQL.
    */
-  private String promQl;
-
-  /**
-   * startTime of the query.
-   */
-  private Long startTime;
-
-  /**
-   * endTime of the query.
-   */
-  private Long endTime;
-
-  /**
-   * step is the resolution required between startTime and endTime.
-   */
-  private String step;
+  private String sql;
 
 }

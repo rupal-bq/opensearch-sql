@@ -68,7 +68,7 @@ public class SparkMetricScan extends TableScanOperator {
     this.iterator = AccessController.doPrivileged((PrivilegedAction<Iterator<ExprValue>>) () -> {
       try {
         JSONObject responseObject = sparkClient.sql(
-            request.getPromQl());
+            request.getSql());
         return new SparkResponse(responseObject, sparkResponseFieldNames,
             isSqlFunctionScan).iterator();
       } catch (IOException e) {
