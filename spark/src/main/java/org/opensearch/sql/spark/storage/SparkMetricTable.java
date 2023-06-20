@@ -6,11 +6,6 @@
 
 package org.opensearch.sql.spark.storage;
 
-import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.LABELS;
-
-import java.util.HashMap;
-import java.util.Map;
-import javax.annotation.Nonnull;
 import lombok.Getter;
 import org.opensearch.sql.data.type.ExprCoreType;
 import org.opensearch.sql.data.type.ExprType;
@@ -20,10 +15,15 @@ import org.opensearch.sql.spark.client.SparkClient;
 import org.opensearch.sql.spark.functions.scan.SqlFunctionTableScanBuilder;
 import org.opensearch.sql.spark.planner.logical.SparkLogicalPlanOptimizerFactory;
 import org.opensearch.sql.spark.request.SparkQueryRequest;
-import org.opensearch.sql.spark.request.system.SparkDescribeMetricRequest;
 import org.opensearch.sql.spark.storage.implementor.SparkDefaultImplementor;
 import org.opensearch.sql.storage.Table;
 import org.opensearch.sql.storage.read.TableScanBuilder;
+
+import javax.annotation.Nonnull;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.LABELS;
 
 /**
  * Spark table (metric) implementation.
@@ -80,15 +80,9 @@ public class SparkMetricTable implements Table {
   @Override
   public Map<String, ExprType> getFieldTypes() {
     if (cachedFieldTypes == null) {
-      if (metricName != null) {
-        cachedFieldTypes =
-            new SparkDescribeMetricRequest(sparkClient, null,
-                metricName).getFieldTypes();
-      } else {
-        cachedFieldTypes = new HashMap<>(SparkMetricDefaultSchema.DEFAULT_MAPPING
-            .getMapping());
-        cachedFieldTypes.put(LABELS, ExprCoreType.STRING);
-      }
+      cachedFieldTypes = new HashMap<>(SparkMetricDefaultSchema.DEFAULT_MAPPING
+              .getMapping());
+      cachedFieldTypes.put(LABELS, ExprCoreType.STRING);
     }
     return cachedFieldTypes;
   }

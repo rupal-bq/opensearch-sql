@@ -18,11 +18,8 @@ import com.amazonaws.services.elasticmapreduce.model.DescribeStepResult;
 import com.amazonaws.services.elasticmapreduce.model.HadoopJarStepConfig;
 import com.amazonaws.services.elasticmapreduce.model.StepConfig;
 import com.amazonaws.services.elasticmapreduce.model.StepStatus;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.json.JSONArray;
 import org.json.JSONObject;
 import org.opensearch.action.ActionFuture;
 import org.opensearch.action.search.SearchRequest;
@@ -33,13 +30,8 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.sql.spark.request.system.model.MetricMetadata;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.FLINT_INTEGRATION_JAR;
 import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.SPARK_APPLICATION_JAR;
@@ -69,33 +61,6 @@ public class SparkClientImpl implements SparkClient {
   public JSONObject sql(String query) throws IOException {
     String stepId = runEmrApplication(query);
     return getResultFromOpensearchIndex(stepId);
-  }
-
-  @Override
-  public List<String> getLabels(String metricName) throws IOException {
-    //TODO get schema from opensearch index
-    return toListOfLabels(new JSONArray());
-  }
-
-  @Override
-  public Map<String, List<MetricMetadata>> getAllMetrics() throws IOException {
-    // TODO
-    JSONObject jsonObject = new JSONObject();
-    TypeReference<HashMap<String, List<MetricMetadata>>> typeRef
-        = new TypeReference<>() {};
-    return new ObjectMapper().readValue(jsonObject.getJSONObject("data").toString(), typeRef);
-  }
-
-  private List<String> toListOfLabels(JSONArray array) {
-    List<String> result = new ArrayList<>();
-    for (int i = 0; i < array.length(); i++) {
-      //__name__ is internal label in spark representing the metric name.
-      //Exempting this from labels list as it is not required in any of the operations.
-      if (!"__name__".equals(array.optString(i))) {
-        result.add(array.optString(i));
-      }
-    }
-    return result;
   }
 
   private String runEmrApplication(String query) {
