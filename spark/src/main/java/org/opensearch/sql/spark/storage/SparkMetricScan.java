@@ -9,18 +9,11 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.json.JSONObject;
 import org.opensearch.sql.data.model.ExprValue;
 import org.opensearch.sql.spark.client.SparkClient;
 import org.opensearch.sql.spark.request.SparkQueryRequest;
-import org.opensearch.sql.spark.response.SparkResponse;
 import org.opensearch.sql.storage.TableScanOperator;
 
-import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.util.Iterator;
 
 /**
@@ -40,13 +33,6 @@ public class SparkMetricScan extends TableScanOperator {
 
   private Iterator<ExprValue> iterator;
 
-  @Setter
-  @Getter
-  private Boolean isSqlFunctionScan = Boolean.FALSE;
-
-
-  private static final Logger LOG = LogManager.getLogger();
-
   /**
    * Constructor.
    *
@@ -55,21 +41,6 @@ public class SparkMetricScan extends TableScanOperator {
   public SparkMetricScan(SparkClient sparkClient) {
     this.sparkClient = sparkClient;
     this.request = new SparkQueryRequest();
-  }
-
-  @Override
-  public void open() {
-    super.open();
-    this.iterator = AccessController.doPrivileged((PrivilegedAction<Iterator<ExprValue>>) () -> {
-      try {
-        JSONObject responseObject = sparkClient.sql(
-            request.getSql());
-        return new SparkResponse(responseObject).iterator();
-      } catch (IOException e) {
-        LOG.error(e.getMessage());
-        throw new RuntimeException("Error fetching data from spark server. " + e.getMessage());
-      }
-    });
   }
 
   @Override

@@ -12,7 +12,6 @@ import org.opensearch.sql.planner.logical.LogicalPlan;
 import org.opensearch.sql.planner.physical.PhysicalPlan;
 import org.opensearch.sql.spark.client.SparkClient;
 import org.opensearch.sql.spark.functions.scan.SqlFunctionTableScanBuilder;
-import org.opensearch.sql.spark.planner.logical.SparkLogicalPlanOptimizerFactory;
 import org.opensearch.sql.spark.request.SparkQueryRequest;
 import org.opensearch.sql.spark.storage.implementor.SparkDefaultImplementor;
 import org.opensearch.sql.storage.Table;
@@ -66,14 +65,8 @@ public class SparkMetricTable implements Table {
         new SparkMetricScan(sparkClient);
     if (sparkQueryRequest != null) {
       metricScan.setRequest(sparkQueryRequest);
-      metricScan.setIsSqlFunctionScan(Boolean.TRUE);
     }
     return plan.accept(new SparkDefaultImplementor(), metricScan);
-  }
-
-  @Override
-  public LogicalPlan optimize(LogicalPlan plan) {
-    return SparkLogicalPlanOptimizerFactory.create().optimize(plan);
   }
 
   //Only handling sql function for now.
