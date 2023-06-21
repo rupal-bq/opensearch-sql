@@ -17,7 +17,7 @@ import org.opensearch.sql.storage.TableScanOperator;
 import java.util.Iterator;
 
 /**
- * Spark metric scan operator.
+ * Spark scan operator.
  */
 @EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
 @ToString(onlyExplicitlyIncluded = true)

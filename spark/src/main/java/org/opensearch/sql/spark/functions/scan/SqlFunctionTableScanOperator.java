@@ -25,7 +25,7 @@ import java.security.PrivilegedAction;
 import java.util.Locale;
 
 /**
- * This a table scan operator to handle Query Range table function.
+ * This a table scan operator to handle sql table function.
  */
 @RequiredArgsConstructor
 public class SqlFunctionTableScanOperator extends TableScanOperator {

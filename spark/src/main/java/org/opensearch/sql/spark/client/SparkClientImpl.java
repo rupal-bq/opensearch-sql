@@ -59,8 +59,8 @@ public class SparkClientImpl implements SparkClient {
 
   @Override
   public JSONObject sql(String query) throws IOException {
-    //String stepId = runEmrApplication(query);
-    return getResultFromOpensearchIndex("s-09786156WWNIU09Y85N");
+    String stepId = runEmrApplication(query);
+    return getResultFromOpensearchIndex(stepId);
   }
 
   private String runEmrApplication(String query) {

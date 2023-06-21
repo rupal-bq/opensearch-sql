@@ -16,8 +16,6 @@ import org.opensearch.sql.storage.read.TableScanBuilder;
 
 /**
  * TableScanBuilder for sql table function of spark connector.
- * we can merge this when we refactor for existing
- * ppl queries based on spark connector.
  */
 @AllArgsConstructor
 public class SqlFunctionTableScanBuilder extends TableScanBuilder {

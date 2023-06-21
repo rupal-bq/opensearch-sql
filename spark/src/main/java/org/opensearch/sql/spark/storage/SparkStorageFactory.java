@@ -24,7 +24,6 @@ import java.util.Map;
 
 @RequiredArgsConstructor
 public class SparkStorageFactory implements DataSourceFactory {
-
   private final Client client;
   private final Settings settings;
   public static final String EMR_CLUSTER = "emr.cluster";
@@ -48,8 +47,6 @@ public class SparkStorageFactory implements DataSourceFactory {
         getStorageEngine(metadata.getProperties()));
   }
 
-
-  //Need to refactor to a separate Validator class.
   private void validateDataSourceConfigProperties(Map<String, String> dataSourceMetadataConfig)
       throws IllegalArgumentException {
     // TODO Update validation

@@ -14,7 +14,7 @@ import org.opensearch.sql.executor.ExecutionEngine;
 public interface SqlFunctionResponseHandle {
 
   /**
-   * Return true if Spark  response has more result.
+   * Return true if Spark response has more result.
    */
   boolean hasNext();
 

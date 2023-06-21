@@ -22,9 +22,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Spark table (metric) implementation.
- * This can be constructed from  a metric Name
- * or from SparkQueryRequest In case of sql table function.
+ * Spark table implementation.
+ * This can be constructed from SparkQueryRequest.
  */
 public class SparkMetricTable implements Table {
 
@@ -45,13 +44,13 @@ public class SparkMetricTable implements Table {
   @Override
   public boolean exists() {
     throw new UnsupportedOperationException(
-        "Spark metric exists operation is not supported");
+        "Exists operation is not supported in spark datasource");
   }
 
   @Override
   public void create(Map<String, ExprType> schema) {
     throw new UnsupportedOperationException(
-        "Spark metric create operation is not supported");
+        "Create operation is not supported in spark datasource");
   }
 
   @Override
@@ -69,8 +68,6 @@ public class SparkMetricTable implements Table {
     return plan.accept(new SparkDefaultImplementor(), metricScan);
   }
 
-  //Only handling sql function for now.
-  //we need to move PPL implementations to ScanBuilder in future.
   @Override
   public TableScanBuilder createScanBuilder() {
     return new SqlFunctionTableScanBuilder(sparkClient, sparkQueryRequest);
