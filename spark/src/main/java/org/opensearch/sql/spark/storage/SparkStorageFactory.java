@@ -14,7 +14,7 @@ import org.opensearch.sql.datasource.model.DataSource;
 import org.opensearch.sql.datasource.model.DataSourceMetadata;
 import org.opensearch.sql.datasource.model.DataSourceType;
 import org.opensearch.sql.spark.client.SparkClient;
-import org.opensearch.sql.spark.client.SparkClientImpl;
+import org.opensearch.sql.spark.client.EmrClientImpl;
 import org.opensearch.sql.storage.DataSourceFactory;
 import org.opensearch.sql.storage.StorageEngine;
 
@@ -61,10 +61,10 @@ public class SparkStorageFactory implements DataSourceFactory {
   StorageEngine getStorageEngine(Map<String, String> requiredConfig) {
     SparkClient sparkClient;
     sparkClient =
-        AccessController.doPrivileged((PrivilegedAction<SparkClientImpl>) () -> {
+        AccessController.doPrivileged((PrivilegedAction<EmrClientImpl>) () -> {
           try {
             validateDataSourceConfigProperties(requiredConfig);
-            return new SparkClientImpl(
+            return new EmrClientImpl(
                     client,
                     requiredConfig.get(EMR_CLUSTER),
                     requiredConfig.get(REGION),

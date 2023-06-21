@@ -37,9 +37,9 @@ import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.FLINT_
 import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.SPARK_APPLICATION_JAR;
 import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.SPARK_INDEX_NAME;
 
-public class SparkClientImpl implements SparkClient {
+public class EmrClientImpl implements SparkClient {
 
-  private static final Logger logger = LogManager.getLogger(SparkClientImpl.class);
+  private static final Logger logger = LogManager.getLogger(EmrClientImpl.class);
 
   private final Client client;
   private final String emrCluster;
@@ -48,7 +48,7 @@ public class SparkClientImpl implements SparkClient {
   private final String region;
   private final String opensearchDomainEndpoint;
 
-  public SparkClientImpl(Client client, String cluster, String region, String accessKey, String secretKey, String opensearchDomainEndpoint) {
+  public EmrClientImpl(Client client, String cluster, String region, String accessKey, String secretKey, String opensearchDomainEndpoint) {
     this.client = client;
     this.emrCluster = cluster;
     this.region = region;
