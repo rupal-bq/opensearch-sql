@@ -14,7 +14,7 @@ import org.opensearch.sql.datasource.model.DataSource;
 import org.opensearch.sql.datasource.model.DataSourceMetadata;
 import org.opensearch.sql.datasource.model.DataSourceType;
 import org.opensearch.sql.spark.client.SparkClient;
-import org.opensearch.sql.spark.client.EmrClientImpl;
+import org.opensearch.sql.spark.client.SparkClientImpl;
 import org.opensearch.sql.storage.DataSourceFactory;
 import org.opensearch.sql.storage.StorageEngine;
 
@@ -61,16 +61,9 @@ public class SparkStorageFactory implements DataSourceFactory {
   StorageEngine getStorageEngine(Map<String, String> requiredConfig) {
     SparkClient sparkClient;
     sparkClient =
-        AccessController.doPrivileged((PrivilegedAction<EmrClientImpl>) () -> {
+        AccessController.doPrivileged((PrivilegedAction<SparkClientImpl>) () -> {
           try {
-            validateDataSourceConfigProperties(requiredConfig);
-            return new EmrClientImpl(
-                    client,
-                    requiredConfig.get(EMR_CLUSTER),
-                    requiredConfig.get(REGION),
-                    requiredConfig.get(ACCESS_KEY),
-                    requiredConfig.get(SECRET_KEY),
-                    requiredConfig.get(OPENSEARCH_DOMAIN_ENDPOINT));
+            return new SparkClientImpl();
           } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException(
                 String.format("Invalid cluster in spark properties: %s", e.getMessage()));
