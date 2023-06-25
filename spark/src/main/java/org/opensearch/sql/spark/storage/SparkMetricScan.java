@@ -9,6 +9,8 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.opensearch.sql.data.model.ExprValue;
 import org.opensearch.sql.spark.client.SparkClient;
 import org.opensearch.sql.spark.request.SparkQueryRequest;
@@ -32,6 +34,7 @@ public class SparkMetricScan extends TableScanOperator {
   private SparkQueryRequest request;
 
   private Iterator<ExprValue> iterator;
+  private static final Logger LOG = LogManager.getLogger();
 
   /**
    * Constructor.

@@ -21,46 +21,49 @@ import com.amazonaws.services.elasticmapreduce.model.StepStatus;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
-import org.opensearch.action.ActionFuture;
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
-import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.index.query.QueryBuilder;
-import org.opensearch.index.query.QueryBuilders;
-import org.opensearch.search.SearchHit;
-import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.sql.spark.response.SparkResponse;
 
 import java.io.IOException;
 
 import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.FLINT_INTEGRATION_JAR;
 import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.SPARK_APPLICATION_JAR;
 import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.SPARK_INDEX_NAME;
+import static org.opensearch.sql.spark.data.constants.SparkFieldConstants.STEP_ID_FIELD;
 
-public class SparkClientImpl implements SparkClient {
-
-  private static final Logger logger = LogManager.getLogger(SparkClientImpl.class);
-
+public class EmrClientImpl implements SparkClient {
   private final Client client;
+
+  private static final Logger logger = LogManager.getLogger(EmrClientImpl.class);
+
   private final String emrCluster;
   private final String accessKey;
   private final String secretKey;
   private final String region;
-  private final String opensearchDomainEndpoint;
+  private final String field = STEP_ID_FIELD;
 
-  public SparkClientImpl(Client client, String cluster, String region, String accessKey, String secretKey, String opensearchDomainEndpoint) {
+  private final String flintHost;
+  private final String flintPort;
+  private final String flintScheme;
+  private final String flintAuth;
+  private final String flintRegion;
+
+  public EmrClientImpl(Client client, String cluster, String region, String accessKey, String secretKey, String flintHost, String flintPort, String flintScheme, String flintAuth, String flintRegion) {
     this.client = client;
     this.emrCluster = cluster;
     this.region = region;
     this.accessKey = accessKey;
     this.secretKey = secretKey;
-    this.opensearchDomainEndpoint = opensearchDomainEndpoint;
+    this.flintHost = flintHost;
+    this.flintPort = flintPort;
+    this.flintScheme = flintScheme;
+    this.flintAuth = flintAuth;
+    this.flintRegion = flintRegion;
   }
 
   @Override
   public JSONObject sql(String query) throws IOException {
-    String stepId = runEmrApplication(query);
-    return getResultFromOpensearchIndex(stepId);
+    return new SparkResponse(client, runEmrApplication(query), field).getResultFromOpensearchIndex();
   }
 
   private String runEmrApplication(String query) {
@@ -77,11 +80,11 @@ public class SparkClientImpl implements SparkClient {
                     SPARK_APPLICATION_JAR,
                     query,
                     SPARK_INDEX_NAME,
-                    opensearchDomainEndpoint,
-                    "-1",
-                    "https",
-                    "sigv4",
-                    region
+                    flintHost,
+                    flintPort,
+                    flintScheme,
+                    flintAuth,
+                    flintRegion
             );
 
     StepConfig emrstep = new StepConfig()
@@ -129,31 +132,4 @@ public class SparkClientImpl implements SparkClient {
     return stepId;
   }
 
-  private JSONObject getResultFromOpensearchIndex(String stepId) {
-    return searchInSparkIndex(QueryBuilders.termQuery("stepId.keyword", stepId));
-  }
-
-  private JSONObject searchInSparkIndex(QueryBuilder query) {
-    SearchRequest searchRequest = new SearchRequest();
-    searchRequest.indices(SPARK_INDEX_NAME);
-    SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-    searchSourceBuilder.query(query);
-    searchRequest.source(searchSourceBuilder);
-    ActionFuture<SearchResponse> searchResponseActionFuture;
-    try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext()
-            .stashContext()) {
-      searchResponseActionFuture = client.search(searchRequest);
-    }
-    SearchResponse searchResponse = searchResponseActionFuture.actionGet();
-    if (searchResponse.status().getStatus() != 200) {
-      throw new RuntimeException("Fetching result from .query_execution_result index failed with status : "
-              + searchResponse.status());
-    } else {
-      JSONObject data = new JSONObject();
-      for(SearchHit searchHit : searchResponse.getHits().getHits()) {
-        data.put("data", searchHit.getSourceAsMap());
-      }
-      return data;
-    }
-  }
 }

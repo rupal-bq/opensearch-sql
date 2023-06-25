@@ -12,4 +12,5 @@ import java.io.IOException;
 public interface SparkClient {
 
   JSONObject sql(String query) throws IOException;
+
 }
