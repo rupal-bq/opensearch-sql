@@ -25,13 +25,11 @@ public class LivyClientImpl implements SparkClient {
     private static final Logger logger = LogManager.getLogger(LivyClientImpl.class);
     private final OkHttpClient okHttpClient;
     private final URI livyUri;
-
     private final String flintHost;
     private final String flintPort;
     private final String flintScheme;
     private final String flintAuth;
     private final String flintRegion;
-
     private final String field = APPLICATION_ID_FIELD;
 
     public LivyClientImpl(Client client, URI uri, String flintHost, String flintPort, String flintScheme, String flintAuth, String flintRegion) {
@@ -50,37 +48,67 @@ public class LivyClientImpl implements SparkClient {
         return new SparkResponse(client, runSparkApplication(query), field).getResultFromOpensearchIndex();
     }
 
-    private String runSparkApplication(String query) {
-        try{
-            MediaType JSON = MediaType.parse("application/json; charset=utf-8");
-            String jsonBody = "{\n" +
-                    "  \"file\": \""+APPLICATION_JAR+"\",\n" +
-                    "  \"className\": \"org.opensearch.sql.SQLJob\",\n" +
-                    "  \"args\": [\""+query+"\",\""+SPARK_INDEX_NAME+"\",\""+flintHost+"\","+flintPort+",\""+flintScheme+"\","+flintAuth+"\",\""+flintRegion+"\"],\n" +
-                    "  \"jars\": [\""+INTEGRATION_JAR+"\",\""+AWS_JAVA_SDK_JAR+"\"]\n" +
-                    "}";
-            RequestBody requestBody = RequestBody.create(jsonBody, JSON);
+    private String runSparkApplication(String query) throws IOException {
+        MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+        String jsonBody = "{\n" +
+                "  \"file\": \""+APPLICATION_JAR+"\",\n" +
+                "  \"className\": \"org.opensearch.sql.SQLJob\",\n" +
+                "  \"args\": [\""+query+"\",\""+SPARK_INDEX_NAME+"\",\""+flintHost+"\","+flintPort+",\""+flintScheme+"\","+flintAuth+",\""+flintRegion+"\"],\n" +
+                "  \"jars\": [\""+INTEGRATION_JAR+"\",\""+AWS_JAVA_SDK_JAR+"\"]\n" +
+                "}";
+        RequestBody requestBody = RequestBody.create(jsonBody, JSON);
+        Request request = new Request.Builder()
+                .url(livyUri.toURL())
+                .post(requestBody)
+                .build();
+        Response response = okHttpClient.newCall(request).execute();
+        if (response.isSuccessful()) {
+            // Handle successful response
+            JSONObject jsonObject = new JSONObject(response.body().string());
+            if (jsonObject.has("appId")) {
+                if(jsonObject.get("appId").equals(null))
+                    throw new IOException("Livy returned null application ID");
+                checkApplicationProgress(jsonObject);
+                return jsonObject.getString("appId");
+            }
+            throw new IllegalArgumentException("Spark application id is missing");
+        } else {
+            // Handle error response
+            logger.info("Livy Error: " + response.code() + " - " + response.message());
+            throw new IOException("Spark Application execution failed");
+        }
+    }
+
+    private void checkApplicationProgress (JSONObject responseObject) throws IOException  {
+        // Wait for the application to complete
+        boolean completed = false;
+        while (!completed) {
+            // Get the application status
             Request request = new Request.Builder()
-                    .url(livyUri.toURL())
-                    .post(requestBody)
+                    .url(livyUri.toURL()+"/"+responseObject.getString("id"))
+                    .get()
                     .build();
             Response response = okHttpClient.newCall(request).execute();
             if (response.isSuccessful()) {
-                // Handle successful response
                 JSONObject jsonObject = new JSONObject(response.body().string());
-                if (jsonObject.has("appId")) {
-                    return jsonObject.getString("appId");
+                String state = jsonObject.getString("state");
+                if(state.equals("success")) {
+                    completed = true;
+                    logger.info("Application completed successfully.");
+                } else if(state.equals("error") || state.equals("dead") || state.equals("killed")) {
+                    completed = true;
+                    logger.error("Application failed or dead.");
                 } else {
-                    throw new IllegalArgumentException("Spark application id is missing");
+                    // Sleep for some time before checking the status again
+                    try {
+                        Thread.sleep(2500);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
             } else {
-                // Handle error response
-                logger.info("Livy Error: " + response.code() + " - " + response.message());
-                throw new Exception("Spark Application execution failed");
+                throw new IOException("Spark Application execution failed");
             }
-        } catch (Exception e){
-            e.printStackTrace();
         }
-        return null;
     }
 }
