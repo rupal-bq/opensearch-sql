@@ -6,16 +6,23 @@
 package org.opensearch.sql.spark.storage;
 
 import static org.opensearch.sql.spark.data.constants.SparkConstants.EMR;
+import static org.opensearch.sql.spark.data.constants.SparkConstants.EMRS;
 import static org.opensearch.sql.spark.data.constants.SparkConstants.STEP_ID_FIELD;
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.elasticmapreduce.AmazonElasticMapReduce;
 import com.amazonaws.services.elasticmapreduce.AmazonElasticMapReduceClientBuilder;
 import java.security.AccessController;
 import java.security.InvalidParameterException;
 import java.security.PrivilegedAction;
 import java.util.Map;
+
+import com.amazonaws.services.emrserverless.AWSEMRServerless;
+import com.amazonaws.services.emrserverless.AWSEMRServerlessClientBuilder;
 import lombok.RequiredArgsConstructor;
 import org.opensearch.client.Client;
 import org.opensearch.sql.common.setting.Settings;
@@ -24,6 +31,7 @@ import org.opensearch.sql.datasource.model.DataSourceMetadata;
 import org.opensearch.sql.datasource.model.DataSourceType;
 import org.opensearch.sql.datasources.auth.AuthenticationType;
 import org.opensearch.sql.spark.client.EmrClientImpl;
+import org.opensearch.sql.spark.client.EmrServerlessClientImpl;
 import org.opensearch.sql.spark.client.SparkClient;
 import org.opensearch.sql.spark.helper.FlintHelper;
 import org.opensearch.sql.spark.response.SparkResponse;
@@ -47,6 +55,10 @@ public class SparkStorageFactory implements DataSourceFactory {
   public static final String EMR_ROLE_ARN = "emr.auth.role_arn";
   public static final String EMR_ACCESS_KEY = "emr.auth.access_key";
   public static final String EMR_SECRET_KEY = "emr.auth.secret_key";
+
+  // EMRS configuration properties
+  public static final String EMRS_APPLICATION_ID = "emrs.application.id";
+  public static final String EMRS_EXECUTION_ROLE = "emrs.execution.role";
 
   // Flint integration jar configuration properties
   public static final String FLINT_INTEGRATION = "spark.datasource.flint.integration";
@@ -97,6 +109,28 @@ public class SparkStorageFactory implements DataSourceFactory {
                         new SparkResponse(client, null, STEP_ID_FIELD),
                         requiredConfig.get(SPARK_SQL_APPLICATION));
                   });
+    } else if (requiredConfig.get(CONNECTOR_TYPE).equals(EMRS)) {
+      sparkClient =
+          AccessController.doPrivileged(
+              (PrivilegedAction<EmrServerlessClientImpl>)
+                  () -> {
+                    return new EmrServerlessClientImpl(
+                        getEMRServerlessClient(
+                            requiredConfig.get(EMR_ACCESS_KEY),
+                            requiredConfig.get(EMR_SECRET_KEY),
+                            requiredConfig.get(EMR_REGION)),
+                        requiredConfig.get(EMRS_APPLICATION_ID),
+                        requiredConfig.get(EMRS_EXECUTION_ROLE),
+                        new FlintHelper(
+                            requiredConfig.get(FLINT_INTEGRATION),
+                            requiredConfig.get(FLINT_HOST),
+                            requiredConfig.get(FLINT_PORT),
+                            requiredConfig.get(FLINT_SCHEME),
+                            requiredConfig.get(FLINT_AUTH),
+                            requiredConfig.get(FLINT_REGION)),
+                        requiredConfig.get(SPARK_SQL_APPLICATION),
+                        new SparkResponse(client, null, STEP_ID_FIELD));
+                  });
     } else {
       throw new InvalidParameterException("Spark connector type is invalid.");
     }
@@ -129,4 +163,14 @@ public class SparkStorageFactory implements DataSourceFactory {
         .withRegion(emrRegion)
         .build();
   }
+
+  private AWSEMRServerless getEMRServerlessClient(String emrAccessKey, String emrSecretKey, String emrRegion) {
+    return AWSEMRServerlessClientBuilder.standard()
+        .withCredentials(
+            new AWSStaticCredentialsProvider(new BasicAWSCredentials(emrAccessKey, emrSecretKey)))
+        .withRegion(emrRegion)
+        .withCredentials(new DefaultAWSCredentialsProviderChain())
+        .build();
+  }
+
 }
