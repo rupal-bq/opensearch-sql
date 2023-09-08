@@ -7,14 +7,18 @@ package org.opensearch.sql.spark.client;
 
 import com.amazonaws.services.emrserverless.AWSEMRServerless;
 import java.io.IOException;
+import java.util.Set;
 
 import com.amazonaws.services.emrserverless.model.CancelJobRunRequest;
 import com.amazonaws.services.emrserverless.model.GetJobRunRequest;
 import com.amazonaws.services.emrserverless.model.GetJobRunResult;
 import com.amazonaws.services.emrserverless.model.JobDriver;
+import com.amazonaws.services.emrserverless.model.JobRun;
+import com.amazonaws.services.emrserverless.model.JobRunState;
 import com.amazonaws.services.emrserverless.model.SparkSubmit;
 import com.amazonaws.services.emrserverless.model.StartJobRunRequest;
 import com.amazonaws.services.emrserverless.model.StartJobRunResult;
+import lombok.SneakyThrows;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
@@ -32,6 +36,8 @@ public class EmrServerlessClientImpl implements SparkClient {
   private final String sparkApplicationJar;
   private SparkResponse sparkResponse;
   private static final Logger logger = LogManager.getLogger(EmrServerlessClientImpl.class);
+  private static final Set<JobRunState> terminalStates = Set.of(JobRunState.CANCELLED, JobRunState.FAILED,
+      JobRunState.SUCCESS);
 
   public EmrServerlessClientImpl(
       AWSEMRServerless emrServerless, String applicationId,
@@ -83,9 +89,29 @@ public class EmrServerlessClientImpl implements SparkClient {
                                 " --conf spark.hadoop.hive.metastore.client.factory.class=com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory")));
     StartJobRunResult response = emrServerless.startJobRun(request);
     logger.info("Job Run ID: "+response.getJobRunId());
+    waitForJobToComplete(response.getJobRunId());
     return response.getJobRunId();
   }
 
+  @SneakyThrows
+  public void waitForJobToComplete(String jobRunId) {
+    logger.info(String.format("Waiting for job %s/%s", applicationId, jobRunId));
+    int retries = 0;
+
+    JobRun job = null;
+    while (retries < 100) {
+      if (!terminalStates.contains(getJobRunState(jobRunId))) {
+        Thread.sleep(10000);
+      } else {
+        break;
+      }
+      retries++;
+    }
+
+    if (job == null || !terminalStates.contains(getJobRunState(jobRunId))) {
+      throw new RuntimeException("Job was not finished after 100 retries" + jobRunId);
+    }
+  }
   public String getJobRunState(String jobRunId) {
     GetJobRunRequest request = new GetJobRunRequest().withApplicationId(applicationId).withJobRunId(jobRunId);
     GetJobRunResult response = emrServerless.getJobRun(request);
