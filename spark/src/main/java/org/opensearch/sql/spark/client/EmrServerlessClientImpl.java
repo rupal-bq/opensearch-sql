@@ -36,8 +36,7 @@ public class EmrServerlessClientImpl implements SparkClient {
   private final String sparkApplicationJar;
   private SparkResponse sparkResponse;
   private static final Logger logger = LogManager.getLogger(EmrServerlessClientImpl.class);
-  private static final Set<JobRunState> terminalStates = Set.of(JobRunState.CANCELLED, JobRunState.FAILED,
-      JobRunState.SUCCESS);
+  private static final Set<String> terminalStates = Set.of("CANCELLED", "FAILED", "SUCCESS");
 
   public EmrServerlessClientImpl(
       AWSEMRServerless emrServerless, String applicationId,
@@ -97,18 +96,16 @@ public class EmrServerlessClientImpl implements SparkClient {
   public void waitForJobToComplete(String jobRunId) {
     logger.info(String.format("Waiting for job %s/%s", applicationId, jobRunId));
     int retries = 0;
-
-    JobRun job = null;
     while (retries < 100) {
       if (!terminalStates.contains(getJobRunState(jobRunId))) {
-        Thread.sleep(10000);
+        Thread.sleep(100);
       } else {
         break;
       }
       retries++;
     }
 
-    if (job == null || !terminalStates.contains(getJobRunState(jobRunId))) {
+    if (!terminalStates.contains(getJobRunState(jobRunId))) {
       throw new RuntimeException("Job was not finished after 100 retries" + jobRunId);
     }
   }
