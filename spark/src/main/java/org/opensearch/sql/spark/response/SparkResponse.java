@@ -72,7 +72,7 @@ public class SparkResponse {
       JSONObject data = new JSONObject();
       for (SearchHit searchHit : searchResponse.getHits().getHits()) {
         data.put("data", searchHit.getSourceAsMap());
-        deleteInSparkIndex(searchHit.getId());
+        //deleteInSparkIndex(searchHit.getId());
       }
       return data;
     }
