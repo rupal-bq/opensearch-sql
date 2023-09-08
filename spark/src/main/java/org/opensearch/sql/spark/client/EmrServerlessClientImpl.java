@@ -25,6 +25,7 @@ import org.json.JSONObject;
 import org.opensearch.sql.spark.helper.FlintHelper;
 import org.opensearch.sql.spark.response.SparkResponse;
 
+import static org.opensearch.sql.spark.data.constants.SparkConstants.SPARK_INDEX_NAME;
 import static org.opensearch.sql.spark.data.constants.SparkConstants.SPARK_SQL_APPLICATION_JAR;
 
 public class EmrServerlessClientImpl implements SparkClient {
@@ -70,7 +71,13 @@ public class EmrServerlessClientImpl implements SparkClient {
                 .withSparkSubmit(
                     new SparkSubmit()
                         .withEntryPoint(sparkApplicationJar)
-                        .withEntryPointArguments(query)
+                        .withEntryPointArguments(query,
+                            SPARK_INDEX_NAME,
+                            flint.getFlintHost(),
+                            flint.getFlintPort(),
+                            flint.getFlintScheme(),
+                            flint.getFlintAuth(),
+                            flint.getFlintRegion())
                         .withSparkSubmitParameters(
                             "--class org.opensearch.sql.SQLJob" +
                                 " --conf spark.driver.cores=1" +
@@ -98,7 +105,7 @@ public class EmrServerlessClientImpl implements SparkClient {
     int retries = 0;
     while (retries < 100) {
       if (!terminalStates.contains(getJobRunState(jobRunId))) {
-        Thread.sleep(100);
+        Thread.sleep(10000);
       } else {
         break;
       }
