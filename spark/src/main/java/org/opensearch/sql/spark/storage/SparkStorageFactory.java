@@ -115,10 +115,7 @@ public class SparkStorageFactory implements DataSourceFactory {
               (PrivilegedAction<EmrServerlessClientImpl>)
                   () -> {
                     return new EmrServerlessClientImpl(
-                        getEMRServerlessClient(
-                            requiredConfig.get(EMR_ACCESS_KEY),
-                            requiredConfig.get(EMR_SECRET_KEY),
-                            requiredConfig.get(EMR_REGION)),
+                        AWSEMRServerlessClientBuilder.defaultClient(),
                         requiredConfig.get(EMRS_APPLICATION_ID),
                         requiredConfig.get(EMRS_EXECUTION_ROLE),
                         new FlintHelper(
@@ -161,15 +158,6 @@ public class SparkStorageFactory implements DataSourceFactory {
         .withCredentials(
             new AWSStaticCredentialsProvider(new BasicAWSCredentials(emrAccessKey, emrSecretKey)))
         .withRegion(emrRegion)
-        .build();
-  }
-
-  private AWSEMRServerless getEMRServerlessClient(String emrAccessKey, String emrSecretKey, String emrRegion) {
-    return AWSEMRServerlessClientBuilder.standard()
-        .withCredentials(
-            new AWSStaticCredentialsProvider(new BasicAWSCredentials(emrAccessKey, emrSecretKey)))
-        .withRegion(emrRegion)
-        .withCredentials(new DefaultAWSCredentialsProviderChain())
         .build();
   }
 

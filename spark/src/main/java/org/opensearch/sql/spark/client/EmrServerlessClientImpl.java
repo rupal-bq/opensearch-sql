@@ -49,7 +49,9 @@ public class EmrServerlessClientImpl implements SparkClient {
   @Override
   public JSONObject sql(String query) throws IOException {
     // TODO: update/ remove for async approach
-    sparkResponse.setValue(startJobRun("temp", query));
+    String jobId = startJobRun("temp", query);
+    sparkResponse.setValue(jobId);
+    getJobRunState(jobId);
     return sparkResponse.getResultFromOpensearchIndex();
   }
 
@@ -80,12 +82,14 @@ public class EmrServerlessClientImpl implements SparkClient {
                                 " --conf spark.executorEnv.JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64/" +
                                 " --conf spark.hadoop.hive.metastore.client.factory.class=com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory")));
     StartJobRunResult response = emrServerless.startJobRun(request);
+    logger.info("Job Run ID: "+response.getJobRunId());
     return response.getJobRunId();
   }
 
   public String getJobRunState(String jobRunId) {
     GetJobRunRequest request = new GetJobRunRequest().withApplicationId(applicationId).withJobRunId(jobRunId);
     GetJobRunResult response = emrServerless.getJobRun(request);
+    logger.info("Job Run state: "+response.getJobRun().getState());
     return response.getJobRun().getState();
   }
 

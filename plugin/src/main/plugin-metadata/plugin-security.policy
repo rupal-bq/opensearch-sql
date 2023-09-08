@@ -15,4 +15,7 @@ grant {
 
   // ml-commons client
   permission java.lang.RuntimePermission "setContextClassLoader";
+
+  // aws credentials
+  permission java.io.FilePermission "${user.home}${/}.aws${/}*", "read";
 };
