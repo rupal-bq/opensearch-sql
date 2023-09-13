@@ -9,6 +9,7 @@ public class SparkConstants {
   public static final String EMR = "emr";
   public static final String EMRS = "emr-serverless";
   public static final String STEP_ID_FIELD = "stepId.keyword";
+  public static final String APPLICATION_ID_FIELD = "applicationId.keyword";
   public static final String SPARK_SQL_APPLICATION_JAR = "s3://spark-datasource/sql-job.jar";
   public static final String SPARK_INDEX_NAME = ".query_execution_result";
   public static final String FLINT_INTEGRATION_JAR =

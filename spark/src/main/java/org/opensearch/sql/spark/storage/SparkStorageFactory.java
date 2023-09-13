@@ -5,6 +5,7 @@
 
 package org.opensearch.sql.spark.storage;
 
+import static org.opensearch.sql.spark.data.constants.SparkConstants.APPLICATION_ID_FIELD;
 import static org.opensearch.sql.spark.data.constants.SparkConstants.EMR;
 import static org.opensearch.sql.spark.data.constants.SparkConstants.EMRS;
 import static org.opensearch.sql.spark.data.constants.SparkConstants.STEP_ID_FIELD;
@@ -126,7 +127,7 @@ public class SparkStorageFactory implements DataSourceFactory {
                             requiredConfig.get(FLINT_AUTH),
                             requiredConfig.get(FLINT_REGION)),
                         requiredConfig.get(SPARK_SQL_APPLICATION),
-                        new SparkResponse(client, null, STEP_ID_FIELD));
+                        new SparkResponse(client, null, APPLICATION_ID_FIELD));
                   });
     } else {
       throw new InvalidParameterException("Spark connector type is invalid.");
