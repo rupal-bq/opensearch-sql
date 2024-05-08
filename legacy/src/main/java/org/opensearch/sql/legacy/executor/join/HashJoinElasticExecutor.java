@@ -33,6 +33,9 @@ import org.opensearch.sql.legacy.query.join.HashJoinElasticRequestBuilder;
 import org.opensearch.sql.legacy.query.join.TableInJoinRequestBuilder;
 import org.opensearch.sql.legacy.query.maker.QueryMaker;
 
+import static org.opensearch.search.sort.FieldSortBuilder.DOC_FIELD_NAME;
+import static org.opensearch.search.sort.SortOrder.ASC;
+
 /** Created by Eliran on 22/8/2015. */
 public class HashJoinElasticExecutor extends ElasticJoinExecutor {
   private HashJoinElasticRequestBuilder requestBuilder;
@@ -131,7 +134,8 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
       searchResponse =
           secondTableRequest
               .getRequestBuilder()
-              .setScroll(new TimeValue(60000))
+              .addSort(DOC_FIELD_NAME, ASC)
+              //.setScroll(new TimeValue(60000))
               .setSize(MAX_RESULTS_ON_ONE_FETCH)
               .get();
       // es5.0 no need to scroll again!
@@ -213,12 +217,16 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
       if (!finishedScrolling) {
         if (secondTableHits.length > 0
             && (hintLimit == null || fetchedSoFarFromSecondTable >= hintLimit)) {
-          searchResponse =
-              client
+          SearchRequestBuilder searchAfterRequest = secondTableRequest
+              .getRequestBuilder()
+              .searchAfter(searchResponse.getHits().getSortFields())
+              .setSize(MAX_RESULTS_ON_ONE_FETCH);
+          searchResponse = searchAfterRequest.get();
+              /*client
                   .prepareSearchScroll(searchResponse.getScrollId())
                   .setScroll(new TimeValue(600000))
                   .execute()
-                  .actionGet();
+                  .actionGet();*/
         } else {
           break;
         }
@@ -311,12 +319,17 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
         System.out.println("too many results for first table, stoping at:" + curentNumOfResults);
         break;
       }
-      scrollResp =
+      SearchRequestBuilder searchAfterRequest = tableInJoinRequest
+          .getRequestBuilder()
+          .searchAfter(scrollResp.getHits().getSortFields())
+          .setSize(MAX_RESULTS_ON_ONE_FETCH);
+      /*scrollResp =
           client
               .prepareSearchScroll(scrollResp.getScrollId())
               .setScroll(new TimeValue(600000))
               .execute()
-              .actionGet();
+              .actionGet();*/
+      scrollResp = searchAfterRequest.get();
       hits = scrollResp.getHits().getHits();
     }
     return hitsWithScan;

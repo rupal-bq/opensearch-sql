@@ -28,6 +28,7 @@ import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.search.sort.FieldSortBuilder;
 import org.opensearch.search.sort.SortOrder;
 import org.opensearch.sql.legacy.domain.Field;
@@ -258,10 +259,11 @@ public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
 
   protected SearchResponse scrollOneTimeWithMax(
       Client client, TableInJoinRequestBuilder tableRequest) {
+
     SearchRequestBuilder scrollRequest =
         tableRequest
             .getRequestBuilder()
-            .setScroll(new TimeValue(60000))
+            //.setScroll(new TimeValue(60000))
             .setSize(MAX_RESULTS_ON_ONE_FETCH);
     boolean ordered = tableRequest.getOriginalSelect().isOrderdSelect();
     if (!ordered) {
