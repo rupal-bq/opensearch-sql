@@ -111,16 +111,11 @@ public class NestedLoopsElasticExecutor extends ElasticJoinExecutor {
           if (!BackOffRetryStrategy.isHealthy()) {
             throw new IllegalStateException("Memory circuit is broken");
           }
-          SearchRequestBuilder searchAfterRequest = nestedLoopsRequest.getFirstTable()
-              .getRequestBuilder()
-              .searchAfter(firstTableResponse.getHits().getSortFields())
-              .setSize(MAX_RESULTS_ON_ONE_FETCH);
-          firstTableResponse = searchAfterRequest.get();
-          /*firstTableResponse =
+          firstTableResponse =
               client
                   .prepareSearchScroll(firstTableResponse.getScrollId())
                   .setScroll(new TimeValue(600000))
-                  .get();*/
+                  .get();
         } else {
           finishedWithFirstTable = true;
         }
