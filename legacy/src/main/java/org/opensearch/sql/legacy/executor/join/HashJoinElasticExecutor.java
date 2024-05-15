@@ -25,9 +25,11 @@ import org.opensearch.index.mapper.MapperService;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.search.SearchHit;
+import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.legacy.domain.Field;
 import org.opensearch.sql.legacy.domain.Select;
 import org.opensearch.sql.legacy.domain.Where;
+import org.opensearch.sql.legacy.esdomain.LocalClusterState;
 import org.opensearch.sql.legacy.exception.SqlParseException;
 import org.opensearch.sql.legacy.query.join.HashJoinElasticRequestBuilder;
 import org.opensearch.sql.legacy.query.join.TableInJoinRequestBuilder;
@@ -128,12 +130,19 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
       searchResponse = secondTableRequest.getRequestBuilder().setSize(hintLimit).get();
       finishedScrolling = true;
     } else {
-      searchResponse =
+      LocalClusterState clusterState = LocalClusterState.state();
+      Boolean paginationWithSearchAfter = clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+
+      SearchRequestBuilder request =
           secondTableRequest
               .getRequestBuilder()
-              .setScroll(new TimeValue(60000))
-              .setSize(MAX_RESULTS_ON_ONE_FETCH)
-              .get();
+              .setSize(MAX_RESULTS_ON_ONE_FETCH);
+
+      if(!paginationWithSearchAfter) {
+        request.setScroll(new TimeValue(60000));
+      }
+
+      searchResponse = request.get();
       // es5.0 no need to scroll again!
       //            searchResponse = client.prepareSearchScroll(searchResponse.getScrollId())
       //            .setScroll(new TimeValue(600000)).get();
@@ -213,12 +222,19 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
       if (!finishedScrolling) {
         if (secondTableHits.length > 0
             && (hintLimit == null || fetchedSoFarFromSecondTable >= hintLimit)) {
-          searchResponse =
-              client
-                  .prepareSearchScroll(searchResponse.getScrollId())
-                  .setScroll(new TimeValue(600000))
-                  .execute()
-                  .actionGet();
+          LocalClusterState clusterState = LocalClusterState.state();
+          Boolean paginationWithSearchAfter = clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+
+          if(paginationWithSearchAfter) {
+            searchResponse = secondTableRequest.getRequestBuilder().setSize(hintLimit).searchAfter(searchResponse.getHits().getSortFields()).get();
+          } else {
+            searchResponse =
+                client
+                    .prepareSearchScroll(searchResponse.getScrollId())
+                    .setScroll(new TimeValue(600000))
+                    .execute()
+                    .actionGet();
+          }
         } else {
           break;
         }
@@ -311,12 +327,21 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
         System.out.println("too many results for first table, stoping at:" + curentNumOfResults);
         break;
       }
-      scrollResp =
-          client
-              .prepareSearchScroll(scrollResp.getScrollId())
-              .setScroll(new TimeValue(600000))
-              .execute()
-              .actionGet();
+
+      LocalClusterState clusterState = LocalClusterState.state();
+      Boolean paginationWithSearchAfter = clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+
+      if(paginationWithSearchAfter) {
+        scrollResp = tableInJoinRequest.getRequestBuilder().setSize(hintLimit).searchAfter(scrollResp.getHits().getSortFields()).get();
+      } else {
+        scrollResp =
+            client
+                .prepareSearchScroll(scrollResp.getScrollId())
+                .setScroll(new TimeValue(600000))
+                .execute()
+                .actionGet();
+      }
+
       hits = scrollResp.getHits().getHits();
     }
     return hitsWithScan;

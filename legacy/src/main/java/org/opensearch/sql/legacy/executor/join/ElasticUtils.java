@@ -26,7 +26,9 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.sort.FieldSortBuilder;
 import org.opensearch.search.sort.SortOrder;
+import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.legacy.domain.Select;
+import org.opensearch.sql.legacy.esdomain.LocalClusterState;
 import org.opensearch.sql.legacy.query.join.BackOffRetryStrategy;
 
 /** Created by Eliran on 2/9/2016. */
@@ -34,13 +36,21 @@ public class ElasticUtils {
 
   public static SearchResponse scrollOneTimeWithHits(
       Client client, SearchRequestBuilder requestBuilder, Select originalSelect, int resultSize) {
-    SearchRequestBuilder scrollRequest =
-        requestBuilder.setScroll(new TimeValue(60000)).setSize(resultSize);
+    LocalClusterState clusterState = LocalClusterState.state();
+    Boolean paginationWithSearchAfter = clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+
+    SearchRequestBuilder request =
+        requestBuilder.setSize(resultSize);
+
+    if(!paginationWithSearchAfter) {
+      request.setScroll(new TimeValue(60000));
+    }
+
     boolean ordered = originalSelect.isOrderdSelect();
     if (!ordered) {
-      scrollRequest.addSort(FieldSortBuilder.DOC_FIELD_NAME, SortOrder.ASC);
+      request.addSort(FieldSortBuilder.DOC_FIELD_NAME, SortOrder.ASC);
     }
-    SearchResponse responseWithHits = scrollRequest.get();
+    SearchResponse responseWithHits = request.get();
     // on ordered select - not using SCAN , elastic returns hits on first scroll
     // es5.0 elastic always return docs on scan
     //        if(!ordered) {
