@@ -131,14 +131,13 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
       finishedScrolling = true;
     } else {
       LocalClusterState clusterState = LocalClusterState.state();
-      Boolean paginationWithSearchAfter = clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+      Boolean paginationWithSearchAfter =
+          clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
 
       SearchRequestBuilder request =
-          secondTableRequest
-              .getRequestBuilder()
-              .setSize(MAX_RESULTS_ON_ONE_FETCH);
+          secondTableRequest.getRequestBuilder().setSize(MAX_RESULTS_ON_ONE_FETCH);
 
-      if(!paginationWithSearchAfter) {
+      if (!paginationWithSearchAfter) {
         request.setScroll(new TimeValue(60000));
       }
 
@@ -223,10 +222,16 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
         if (secondTableHits.length > 0
             && (hintLimit == null || fetchedSoFarFromSecondTable >= hintLimit)) {
           LocalClusterState clusterState = LocalClusterState.state();
-          Boolean paginationWithSearchAfter = clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+          Boolean paginationWithSearchAfter =
+              clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
 
-          if(paginationWithSearchAfter) {
-            searchResponse = secondTableRequest.getRequestBuilder().setSize(hintLimit).searchAfter(searchResponse.getHits().getSortFields()).get();
+          if (paginationWithSearchAfter) {
+            searchResponse =
+                secondTableRequest
+                    .getRequestBuilder()
+                    .setSize(hintLimit)
+                    .searchAfter(searchResponse.getHits().getSortFields())
+                    .get();
           } else {
             searchResponse =
                 client
@@ -329,10 +334,16 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
       }
 
       LocalClusterState clusterState = LocalClusterState.state();
-      Boolean paginationWithSearchAfter = clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+      Boolean paginationWithSearchAfter =
+          clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
 
-      if(paginationWithSearchAfter) {
-        scrollResp = tableInJoinRequest.getRequestBuilder().setSize(hintLimit).searchAfter(scrollResp.getHits().getSortFields()).get();
+      if (paginationWithSearchAfter) {
+        scrollResp =
+            tableInJoinRequest
+                .getRequestBuilder()
+                .setSize(hintLimit)
+                .searchAfter(scrollResp.getHits().getSortFields())
+                .get();
       } else {
         scrollResp =
             client

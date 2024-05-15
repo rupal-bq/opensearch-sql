@@ -261,13 +261,13 @@ public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
   protected SearchResponse scrollOneTimeWithMax(
       Client client, TableInJoinRequestBuilder tableRequest) {
     LocalClusterState clusterState = LocalClusterState.state();
-    Boolean paginationWithSearchAfter = clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+    Boolean paginationWithSearchAfter =
+        clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
 
-    SearchRequestBuilder request  = tableRequest
-        .getRequestBuilder()
-        .setSize(MAX_RESULTS_ON_ONE_FETCH);
+    SearchRequestBuilder request =
+        tableRequest.getRequestBuilder().setSize(MAX_RESULTS_ON_ONE_FETCH);
 
-    if(!paginationWithSearchAfter) {
+    if (!paginationWithSearchAfter) {
       request.setScroll(new TimeValue(60000));
     }
 

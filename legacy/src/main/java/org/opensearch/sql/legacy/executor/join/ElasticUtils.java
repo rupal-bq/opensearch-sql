@@ -37,12 +37,12 @@ public class ElasticUtils {
   public static SearchResponse scrollOneTimeWithHits(
       Client client, SearchRequestBuilder requestBuilder, Select originalSelect, int resultSize) {
     LocalClusterState clusterState = LocalClusterState.state();
-    Boolean paginationWithSearchAfter = clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+    Boolean paginationWithSearchAfter =
+        clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
 
-    SearchRequestBuilder request =
-        requestBuilder.setSize(resultSize);
+    SearchRequestBuilder request = requestBuilder.setSize(resultSize);
 
-    if(!paginationWithSearchAfter) {
+    if (!paginationWithSearchAfter) {
       request.setScroll(new TimeValue(60000));
     }
 
