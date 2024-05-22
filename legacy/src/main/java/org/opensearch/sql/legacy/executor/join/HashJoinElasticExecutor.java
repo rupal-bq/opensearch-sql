@@ -150,8 +150,9 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
             new ActionListener<CreatePitResponse>() {
               @Override
               public void onResponse(CreatePitResponse createPitResponse) {
-                request.setPointInTime(new PointInTimeBuilder(createPitResponse.getId())
-                    .setKeepAlive(new TimeValue(600000)));
+                request.setPointInTime(
+                    new PointInTimeBuilder(createPitResponse.getId())
+                        .setKeepAlive(new TimeValue(600000)));
               }
 
               @Override
@@ -174,8 +175,9 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
             new ActionListener<CreatePitResponse>() {
               @Override
               public void onResponse(CreatePitResponse createPitResponse) {
-                request.setPointInTime(new PointInTimeBuilder(createPitResponse.getId())
-                    .setKeepAlive(new TimeValue(600000)));
+                request.setPointInTime(
+                    new PointInTimeBuilder(createPitResponse.getId())
+                        .setKeepAlive(new TimeValue(600000)));
               }
 
               @Override
@@ -272,8 +274,9 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
                     .getRequestBuilder()
                     .setSize(hintLimit)
                     .searchAfter(searchResponse.getHits().getSortFields())
-                    .setPointInTime(new PointInTimeBuilder(searchResponse.pointInTimeId())
-                        .setKeepAlive(new TimeValue(600000)))
+                    .setPointInTime(
+                        new PointInTimeBuilder(searchResponse.pointInTimeId())
+                            .setKeepAlive(new TimeValue(600000)))
                     .get();
           } else {
             searchResponse =
@@ -386,8 +389,9 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
                 .getRequestBuilder()
                 .setSize(hintLimit)
                 .searchAfter(response.getHits().getSortFields())
-                .setPointInTime(new PointInTimeBuilder(response.pointInTimeId())
-                    .setKeepAlive(new TimeValue(600000)))
+                .setPointInTime(
+                    new PointInTimeBuilder(response.pointInTimeId())
+                        .setKeepAlive(new TimeValue(600000)))
                 .get();
       } else {
         response =

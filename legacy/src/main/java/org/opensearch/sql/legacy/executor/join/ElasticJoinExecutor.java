@@ -281,8 +281,9 @@ public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
           new ActionListener<CreatePitResponse>() {
             @Override
             public void onResponse(CreatePitResponse createPitResponse) {
-              request.setPointInTime(new PointInTimeBuilder(createPitResponse.getId())
-                  .setKeepAlive(new TimeValue(600000)));
+              request.setPointInTime(
+                  new PointInTimeBuilder(createPitResponse.getId())
+                      .setKeepAlive(new TimeValue(600000)));
             }
 
             @Override
