@@ -43,7 +43,7 @@ public class ElasticUtils {
     SearchRequestBuilder request = requestBuilder.setSize(resultSize);
 
     if (!paginationWithSearchAfter) {
-      request.setScroll(new TimeValue(60000));
+      request.setScroll(new TimeValue(600000));
     }
 
     boolean ordered = originalSelect.isOrderdSelect();

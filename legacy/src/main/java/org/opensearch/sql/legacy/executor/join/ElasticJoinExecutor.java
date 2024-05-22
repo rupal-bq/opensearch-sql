@@ -272,16 +272,17 @@ public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
         tableRequest.getRequestBuilder().setSize(MAX_RESULTS_ON_ONE_FETCH);
 
     if (!paginationWithSearchAfter) {
-      request.setScroll(new TimeValue(60000));
+      request.setScroll(new TimeValue(600000));
     } else {
       CreatePitRequest createPitRequest =
-          new CreatePitRequest(new TimeValue(60000), false, tableRequest.getIndices());
+          new CreatePitRequest(new TimeValue(600000), false, tableRequest.getIndices());
       client.createPit(
           createPitRequest,
           new ActionListener<CreatePitResponse>() {
             @Override
             public void onResponse(CreatePitResponse createPitResponse) {
-              request.setPointInTime(new PointInTimeBuilder(createPitResponse.getId()));
+              request.setPointInTime(new PointInTimeBuilder(createPitResponse.getId())
+                  .setKeepAlive(new TimeValue(600000)));
             }
 
             @Override

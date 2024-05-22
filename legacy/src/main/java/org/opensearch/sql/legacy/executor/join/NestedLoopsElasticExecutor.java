@@ -125,7 +125,8 @@ public class NestedLoopsElasticExecutor extends ElasticJoinExecutor {
                     .getFirstTable()
                     .getRequestBuilder()
                     .searchAfter(firstTableResponse.getHits().getSortFields())
-                    .setPointInTime(new PointInTimeBuilder(firstTableResponse.pointInTimeId()))
+                    .setPointInTime(new PointInTimeBuilder(firstTableResponse.pointInTimeId())
+                        .setKeepAlive(new TimeValue(600000)))
                     .get();
           } else {
             firstTableResponse =
