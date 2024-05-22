@@ -107,6 +107,7 @@ public abstract class OpenSearchJoinQueryAction extends QueryAction {
     requestBuilder.setRequestBuilder(queryAction.getRequestBuilder());
     requestBuilder.setReturnedFields(tableOnJoinSelect.getSelectedFields());
     requestBuilder.setAlias(tableOnJoinSelect.getAlias());
+    requestBuilder.setIndices(query.getIndexArr());
   }
 
   private void addFieldsToSelectIfMissing(Select select, List<Field> fields) {

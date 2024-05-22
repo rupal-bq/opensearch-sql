@@ -16,11 +16,14 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.search.TotalHits.Relation;
+import org.opensearch.action.search.CreatePitRequest;
+import org.opensearch.action.search.CreatePitResponse;
 import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.document.DocumentField;
 import org.opensearch.common.unit.TimeValue;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.mapper.MapperService;
@@ -28,6 +31,7 @@ import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.builder.PointInTimeBuilder;
 import org.opensearch.search.sort.FieldSortBuilder;
 import org.opensearch.search.sort.SortOrder;
 import org.opensearch.sql.common.setting.Settings;
@@ -269,6 +273,22 @@ public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
 
     if (!paginationWithSearchAfter) {
       request.setScroll(new TimeValue(60000));
+    } else {
+      CreatePitRequest createPitRequest =
+          new CreatePitRequest(new TimeValue(60000), false, tableRequest.getIndices());
+      client.createPit(
+          createPitRequest,
+          new ActionListener<CreatePitResponse>() {
+            @Override
+            public void onResponse(CreatePitResponse createPitResponse) {
+              request.setPointInTime(new PointInTimeBuilder(createPitResponse.getId()));
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+              LOG.error("Error happened while creating PIT" + e);
+            }
+          });
     }
 
     boolean ordered = tableRequest.getOriginalSelect().isOrderdSelect();

@@ -16,15 +16,21 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.opensearch.action.search.CreatePitRequest;
+import org.opensearch.action.search.CreatePitResponse;
 import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.document.DocumentField;
 import org.opensearch.common.unit.TimeValue;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.mapper.MapperService;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.search.SearchHit;
+import org.opensearch.search.builder.PointInTimeBuilder;
 import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.legacy.domain.Field;
 import org.opensearch.sql.legacy.domain.Select;
@@ -44,6 +50,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
   private final int MAX_RESULTS_FOR_FIRST_TABLE = 100000;
   HashJoinComparisonStructure hashJoinComparisonStructure;
   private Set<String> alreadyMatched;
+  private static final Logger LOG = LogManager.getLogger();
 
   public HashJoinElasticExecutor(Client client, HashJoinElasticRequestBuilder requestBuilder) {
     super(requestBuilder);
@@ -126,19 +133,54 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
     Integer hintLimit = secondTableRequest.getHintLimit();
     SearchResponse searchResponse;
     boolean finishedScrolling;
+
+    LocalClusterState clusterState = LocalClusterState.state();
+    Boolean paginationWithSearchAfter =
+        clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+
+    CreatePitRequest createPitRequest =
+        new CreatePitRequest(new TimeValue(60000), false, secondTableRequest.getIndices());
+
     if (hintLimit != null && hintLimit < MAX_RESULTS_ON_ONE_FETCH) {
-      searchResponse = secondTableRequest.getRequestBuilder().setSize(hintLimit).get();
+      SearchRequestBuilder request = secondTableRequest.getRequestBuilder().setSize(hintLimit);
+
+      if (paginationWithSearchAfter) {
+        client.createPit(
+            createPitRequest,
+            new ActionListener<CreatePitResponse>() {
+              @Override
+              public void onResponse(CreatePitResponse createPitResponse) {
+                request.setPointInTime(new PointInTimeBuilder(createPitResponse.getId()));
+              }
+
+              @Override
+              public void onFailure(Exception e) {
+                LOG.error("Error happened while creating PIT" + e);
+              }
+            });
+      }
+      searchResponse = request.get();
       finishedScrolling = true;
     } else {
-      LocalClusterState clusterState = LocalClusterState.state();
-      Boolean paginationWithSearchAfter =
-          clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
-
       SearchRequestBuilder request =
           secondTableRequest.getRequestBuilder().setSize(MAX_RESULTS_ON_ONE_FETCH);
 
       if (!paginationWithSearchAfter) {
         request.setScroll(new TimeValue(60000));
+      } else {
+        client.createPit(
+            createPitRequest,
+            new ActionListener<CreatePitResponse>() {
+              @Override
+              public void onResponse(CreatePitResponse createPitResponse) {
+                request.setPointInTime(new PointInTimeBuilder(createPitResponse.getId()));
+              }
+
+              @Override
+              public void onFailure(Exception e) {
+                LOG.error("Error happened while creating PIT" + e);
+              }
+            });
       }
 
       searchResponse = request.get();
@@ -221,9 +263,6 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
       if (!finishedScrolling) {
         if (secondTableHits.length > 0
             && (hintLimit == null || fetchedSoFarFromSecondTable >= hintLimit)) {
-          LocalClusterState clusterState = LocalClusterState.state();
-          Boolean paginationWithSearchAfter =
-              clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
 
           if (paginationWithSearchAfter) {
             searchResponse =
@@ -231,6 +270,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
                     .getRequestBuilder()
                     .setSize(hintLimit)
                     .searchAfter(searchResponse.getHits().getSortFields())
+                    .setPointInTime(new PointInTimeBuilder(searchResponse.pointInTimeId()))
                     .get();
           } else {
             searchResponse =
@@ -313,12 +353,12 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
 
   private List<SearchHit> scrollTillLimit(
       TableInJoinRequestBuilder tableInJoinRequest, Integer hintLimit) {
-    SearchResponse scrollResp = scrollOneTimeWithMax(client, tableInJoinRequest);
+    SearchResponse response = scrollOneTimeWithMax(client, tableInJoinRequest);
 
-    updateMetaSearchResults(scrollResp);
+    updateMetaSearchResults(response);
     List<SearchHit> hitsWithScan = new ArrayList<>();
     int curentNumOfResults = 0;
-    SearchHit[] hits = scrollResp.getHits().getHits();
+    SearchHit[] hits = response.getHits().getHits();
 
     if (hintLimit == null) {
       hintLimit = MAX_RESULTS_FOR_FIRST_TABLE;
@@ -338,22 +378,23 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
           clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
 
       if (paginationWithSearchAfter) {
-        scrollResp =
+        response =
             tableInJoinRequest
                 .getRequestBuilder()
                 .setSize(hintLimit)
-                .searchAfter(scrollResp.getHits().getSortFields())
+                .searchAfter(response.getHits().getSortFields())
+                .setPointInTime(new PointInTimeBuilder(response.pointInTimeId()))
                 .get();
       } else {
-        scrollResp =
+        response =
             client
-                .prepareSearchScroll(scrollResp.getScrollId())
+                .prepareSearchScroll(response.getScrollId())
                 .setScroll(new TimeValue(600000))
                 .execute()
                 .actionGet();
       }
 
-      hits = scrollResp.getHits().getHits();
+      hits = response.getHits().getHits();
     }
     return hitsWithScan;
   }

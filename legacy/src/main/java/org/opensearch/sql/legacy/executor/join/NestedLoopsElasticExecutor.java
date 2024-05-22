@@ -22,9 +22,12 @@ import org.opensearch.common.unit.TimeValue;
 import org.opensearch.index.mapper.MapperService;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.builder.PointInTimeBuilder;
+import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.legacy.domain.Condition;
 import org.opensearch.sql.legacy.domain.Select;
 import org.opensearch.sql.legacy.domain.Where;
+import org.opensearch.sql.legacy.esdomain.LocalClusterState;
 import org.opensearch.sql.legacy.esdomain.OpenSearchClient;
 import org.opensearch.sql.legacy.exception.SqlParseException;
 import org.opensearch.sql.legacy.query.DefaultQueryAction;
@@ -111,11 +114,26 @@ public class NestedLoopsElasticExecutor extends ElasticJoinExecutor {
           if (!BackOffRetryStrategy.isHealthy()) {
             throw new IllegalStateException("Memory circuit is broken");
           }
-          firstTableResponse =
-              client
-                  .prepareSearchScroll(firstTableResponse.getScrollId())
-                  .setScroll(new TimeValue(600000))
-                  .get();
+
+          LocalClusterState clusterState = LocalClusterState.state();
+          Boolean paginationWithSearchAfter =
+              clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+
+          if (paginationWithSearchAfter) {
+            firstTableResponse =
+                this.nestedLoopsRequest
+                    .getFirstTable()
+                    .getRequestBuilder()
+                    .searchAfter(firstTableResponse.getHits().getSortFields())
+                    .setPointInTime(new PointInTimeBuilder(firstTableResponse.pointInTimeId()))
+                    .get();
+          } else {
+            firstTableResponse =
+                client
+                    .prepareSearchScroll(firstTableResponse.getScrollId())
+                    .setScroll(new TimeValue(600000))
+                    .get();
+          }
         } else {
           finishedWithFirstTable = true;
         }

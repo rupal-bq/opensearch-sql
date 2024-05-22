@@ -17,6 +17,7 @@ public class TableInJoinRequestBuilder {
   private List<Field> returnedFields;
   private Select originalSelect;
   private Integer hintLimit;
+  private String[] indices;
 
   public TableInJoinRequestBuilder() {}
 
@@ -58,5 +59,13 @@ public class TableInJoinRequestBuilder {
 
   public void setHintLimit(Integer hintLimit) {
     this.hintLimit = hintLimit;
+  }
+
+  public void setIndices(String[] indices) {
+    this.indices = indices;
+  }
+
+  public String[] getIndices() {
+    return indices;
   }
 }
