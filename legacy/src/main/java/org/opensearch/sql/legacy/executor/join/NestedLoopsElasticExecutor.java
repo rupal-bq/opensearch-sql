@@ -5,6 +5,10 @@
 
 package org.opensearch.sql.legacy.executor.join;
 
+import static org.opensearch.search.sort.FieldSortBuilder.DOC_FIELD_NAME;
+import static org.opensearch.search.sort.SortOrder.ASC;
+import static org.opensearch.sql.common.setting.Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER;
+
 import com.alibaba.druid.sql.ast.statement.SQLJoinTableSource;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -12,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.opensearch.action.search.CreatePitRequest;
+import org.opensearch.action.search.CreatePitResponse;
 import org.opensearch.action.search.MultiSearchRequest;
 import org.opensearch.action.search.MultiSearchResponse;
 import org.opensearch.action.search.SearchRequestBuilder;
@@ -19,11 +25,11 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.document.DocumentField;
 import org.opensearch.common.unit.TimeValue;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.mapper.MapperService;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.PointInTimeBuilder;
-import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.legacy.domain.Condition;
 import org.opensearch.sql.legacy.domain.Select;
 import org.opensearch.sql.legacy.domain.Where;
@@ -117,7 +123,7 @@ public class NestedLoopsElasticExecutor extends ElasticJoinExecutor {
 
           LocalClusterState clusterState = LocalClusterState.state();
           Boolean paginationWithSearchAfter =
-              clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+              clusterState.getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER);
 
           if (paginationWithSearchAfter) {
             firstTableResponse =
@@ -283,6 +289,26 @@ public class NestedLoopsElasticExecutor extends ElasticJoinExecutor {
       if (secondTableHintLimit != null && secondTableHintLimit <= MAX_RESULTS_ON_ONE_FETCH) {
         secondTableRequest.setSize(secondTableHintLimit);
       }
+      CreatePitRequest createPitRequest =
+          new CreatePitRequest(new TimeValue(600000), false, secondTableSelect.getIndexArr());
+
+      client.createPit(
+          createPitRequest,
+          new ActionListener<>() {
+            @Override
+            public void onResponse(CreatePitResponse createPitResponse) {
+              secondTableRequest.setPointInTime(
+                  new PointInTimeBuilder(createPitResponse.getId())
+                      .setKeepAlive(new TimeValue(600000)));
+              secondTableRequest.addSort(DOC_FIELD_NAME, ASC);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+              LOG.error("Error happened while creating PIT" + e);
+            }
+          });
+
       multiSearchRequest.add(secondTableRequest);
     }
     return multiSearchRequest;

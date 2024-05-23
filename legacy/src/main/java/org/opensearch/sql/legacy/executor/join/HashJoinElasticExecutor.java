@@ -5,6 +5,10 @@
 
 package org.opensearch.sql.legacy.executor.join;
 
+import static org.opensearch.search.sort.FieldSortBuilder.DOC_FIELD_NAME;
+import static org.opensearch.search.sort.SortOrder.ASC;
+import static org.opensearch.sql.common.setting.Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER;
+
 import com.alibaba.druid.sql.ast.statement.SQLJoinTableSource;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -31,7 +35,6 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.PointInTimeBuilder;
-import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.legacy.domain.Field;
 import org.opensearch.sql.legacy.domain.Select;
 import org.opensearch.sql.legacy.domain.Where;
@@ -136,7 +139,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
 
     LocalClusterState clusterState = LocalClusterState.state();
     Boolean paginationWithSearchAfter =
-        clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+        clusterState.getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER);
 
     CreatePitRequest createPitRequest =
         new CreatePitRequest(new TimeValue(600000), false, secondTableRequest.getIndices());
@@ -147,7 +150,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
       if (paginationWithSearchAfter) {
         client.createPit(
             createPitRequest,
-            new ActionListener<CreatePitResponse>() {
+            new ActionListener<>() {
               @Override
               public void onResponse(CreatePitResponse createPitResponse) {
                 request.setPointInTime(
@@ -161,6 +164,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
               }
             });
       }
+      request.addSort(DOC_FIELD_NAME, ASC);
       searchResponse = request.get();
       finishedScrolling = true;
     } else {
@@ -172,7 +176,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
       } else {
         client.createPit(
             createPitRequest,
-            new ActionListener<CreatePitResponse>() {
+            new ActionListener<>() {
               @Override
               public void onResponse(CreatePitResponse createPitResponse) {
                 request.setPointInTime(
@@ -186,7 +190,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
               }
             });
       }
-
+      request.addSort(DOC_FIELD_NAME, ASC);
       searchResponse = request.get();
       // es5.0 no need to scroll again!
       //            searchResponse = client.prepareSearchScroll(searchResponse.getScrollId())
@@ -381,7 +385,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
 
       LocalClusterState clusterState = LocalClusterState.state();
       Boolean paginationWithSearchAfter =
-          clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+          clusterState.getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER);
 
       if (paginationWithSearchAfter) {
         response =

@@ -5,6 +5,9 @@
 
 package org.opensearch.sql.legacy.executor.join;
 
+import static org.opensearch.search.sort.FieldSortBuilder.DOC_FIELD_NAME;
+import static org.opensearch.search.sort.SortOrder.ASC;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
@@ -32,8 +35,6 @@ import org.opensearch.rest.RestChannel;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.PointInTimeBuilder;
-import org.opensearch.search.sort.FieldSortBuilder;
-import org.opensearch.search.sort.SortOrder;
 import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.legacy.domain.Field;
 import org.opensearch.sql.legacy.esdomain.LocalClusterState;
@@ -278,7 +279,7 @@ public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
           new CreatePitRequest(new TimeValue(600000), false, tableRequest.getIndices());
       client.createPit(
           createPitRequest,
-          new ActionListener<CreatePitResponse>() {
+          new ActionListener<>() {
             @Override
             public void onResponse(CreatePitResponse createPitResponse) {
               request.setPointInTime(
@@ -292,10 +293,9 @@ public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
             }
           });
     }
-
     boolean ordered = tableRequest.getOriginalSelect().isOrderdSelect();
     if (!ordered) {
-      request.addSort(FieldSortBuilder.DOC_FIELD_NAME, SortOrder.ASC);
+      request.addSort(DOC_FIELD_NAME, ASC);
     }
     SearchResponse responseWithHits = request.get();
     // on ordered select - not using SCAN , elastic returns hits on first scroll

@@ -6,6 +6,9 @@
 package org.opensearch.sql.legacy.executor.join;
 
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.search.sort.FieldSortBuilder.DOC_FIELD_NAME;
+import static org.opensearch.search.sort.SortOrder.ASC;
+import static org.opensearch.sql.common.setting.Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER;
 
 import com.google.common.collect.ImmutableMap;
 import java.io.IOException;
@@ -24,9 +27,6 @@ import org.opensearch.core.xcontent.ToXContent.Params;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
-import org.opensearch.search.sort.FieldSortBuilder;
-import org.opensearch.search.sort.SortOrder;
-import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.legacy.domain.Select;
 import org.opensearch.sql.legacy.esdomain.LocalClusterState;
 import org.opensearch.sql.legacy.query.join.BackOffRetryStrategy;
@@ -38,7 +38,7 @@ public class ElasticUtils {
       Client client, SearchRequestBuilder requestBuilder, Select originalSelect, int resultSize) {
     LocalClusterState clusterState = LocalClusterState.state();
     Boolean paginationWithSearchAfter =
-        clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER);
+        clusterState.getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER);
 
     SearchRequestBuilder request = requestBuilder.setSize(resultSize);
 
@@ -48,7 +48,7 @@ public class ElasticUtils {
 
     boolean ordered = originalSelect.isOrderdSelect();
     if (!ordered) {
-      request.addSort(FieldSortBuilder.DOC_FIELD_NAME, SortOrder.ASC);
+      request.addSort(DOC_FIELD_NAME, ASC);
     }
     SearchResponse responseWithHits = request.get();
     // on ordered select - not using SCAN , elastic returns hits on first scroll
