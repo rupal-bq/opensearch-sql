@@ -272,9 +272,7 @@ public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
     SearchRequestBuilder request =
         tableRequest.getRequestBuilder().setSize(MAX_RESULTS_ON_ONE_FETCH);
 
-    if (!paginationWithSearchAfter) {
-      request.setScroll(new TimeValue(600000));
-    } else {
+    if (paginationWithSearchAfter) {
       CreatePitRequest createPitRequest =
           new CreatePitRequest(new TimeValue(600000), false, tableRequest.getIndices());
       client.createPit(
@@ -292,6 +290,8 @@ public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
               LOG.error("Error happened while creating PIT" + e);
             }
           });
+    } else {
+      request.setScroll(new TimeValue(600000));
     }
     boolean ordered = tableRequest.getOriginalSelect().isOrderdSelect();
     if (!ordered) {

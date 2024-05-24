@@ -156,6 +156,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
                 request.setPointInTime(
                     new PointInTimeBuilder(createPitResponse.getId())
                         .setKeepAlive(new TimeValue(600000)));
+                request.addSort(DOC_FIELD_NAME, ASC);
               }
 
               @Override
@@ -164,16 +165,13 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
               }
             });
       }
-      request.addSort(DOC_FIELD_NAME, ASC);
       searchResponse = request.get();
       finishedScrolling = true;
     } else {
       SearchRequestBuilder request =
           secondTableRequest.getRequestBuilder().setSize(MAX_RESULTS_ON_ONE_FETCH);
 
-      if (!paginationWithSearchAfter) {
-        request.setScroll(new TimeValue(600000));
-      } else {
+      if (paginationWithSearchAfter) {
         client.createPit(
             createPitRequest,
             new ActionListener<>() {
@@ -182,6 +180,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
                 request.setPointInTime(
                     new PointInTimeBuilder(createPitResponse.getId())
                         .setKeepAlive(new TimeValue(600000)));
+                request.addSort(DOC_FIELD_NAME, ASC);
               }
 
               @Override
@@ -189,8 +188,9 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
                 LOG.error("Error happened while creating PIT" + e);
               }
             });
+      } else {
+        request.setScroll(new TimeValue(600000));
       }
-      request.addSort(DOC_FIELD_NAME, ASC);
       searchResponse = request.get();
       // es5.0 no need to scroll again!
       //            searchResponse = client.prepareSearchScroll(searchResponse.getScrollId())
@@ -276,7 +276,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
             searchResponse =
                 secondTableRequest
                     .getRequestBuilder()
-                    .setSize(hintLimit)
+                    .setSize(MAX_RESULTS_ON_ONE_FETCH)
                     .searchAfter(searchResponse.getHits().getSortFields())
                     .setPointInTime(
                         new PointInTimeBuilder(searchResponse.pointInTimeId())
@@ -391,7 +391,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
         response =
             tableInJoinRequest
                 .getRequestBuilder()
-                .setSize(hintLimit)
+                .setSize(MAX_RESULTS_FOR_FIRST_TABLE)
                 .searchAfter(response.getHits().getSortFields())
                 .setPointInTime(
                     new PointInTimeBuilder(response.pointInTimeId())
