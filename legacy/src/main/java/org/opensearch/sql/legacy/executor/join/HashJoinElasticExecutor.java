@@ -156,7 +156,6 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
                 request.setPointInTime(
                     new PointInTimeBuilder(createPitResponse.getId())
                         .setKeepAlive(new TimeValue(600000)));
-                request.addSort(DOC_FIELD_NAME, ASC);
               }
 
               @Override
@@ -164,6 +163,10 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
                 LOG.error("Error happened while creating PIT" + e);
               }
             });
+        boolean ordered = secondTableRequest.getOriginalSelect().isOrderdSelect();
+        if (!ordered) {
+          request.addSort(DOC_FIELD_NAME, ASC);
+        }
       }
       searchResponse = request.get();
       finishedScrolling = true;
@@ -180,7 +183,6 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
                 request.setPointInTime(
                     new PointInTimeBuilder(createPitResponse.getId())
                         .setKeepAlive(new TimeValue(600000)));
-                request.addSort(DOC_FIELD_NAME, ASC);
               }
 
               @Override
@@ -188,6 +190,10 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
                 LOG.error("Error happened while creating PIT" + e);
               }
             });
+        boolean ordered = secondTableRequest.getOriginalSelect().isOrderdSelect();
+        if (!ordered) {
+          request.addSort(DOC_FIELD_NAME, ASC);
+        }
       } else {
         request.setScroll(new TimeValue(600000));
       }
@@ -273,15 +279,19 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
             && (hintLimit == null || fetchedSoFarFromSecondTable >= hintLimit)) {
 
           if (paginationWithSearchAfter) {
-            searchResponse =
+            SearchRequestBuilder request =
                 secondTableRequest
                     .getRequestBuilder()
                     .setSize(MAX_RESULTS_ON_ONE_FETCH)
                     .searchAfter(searchResponse.getHits().getSortFields())
                     .setPointInTime(
                         new PointInTimeBuilder(searchResponse.pointInTimeId())
-                            .setKeepAlive(new TimeValue(600000)))
-                    .get();
+                            .setKeepAlive(new TimeValue(600000)));
+            boolean ordered = secondTableRequest.getOriginalSelect().isOrderdSelect();
+            if (!ordered) {
+              request.addSort(DOC_FIELD_NAME, ASC);
+            }
+            searchResponse = request.get();
           } else {
             searchResponse =
                 client
@@ -388,15 +398,19 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
           clusterState.getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER);
 
       if (paginationWithSearchAfter) {
-        response =
+        SearchRequestBuilder request =
             tableInJoinRequest
                 .getRequestBuilder()
                 .setSize(MAX_RESULTS_FOR_FIRST_TABLE)
                 .searchAfter(response.getHits().getSortFields())
                 .setPointInTime(
                     new PointInTimeBuilder(response.pointInTimeId())
-                        .setKeepAlive(new TimeValue(600000)))
-                .get();
+                        .setKeepAlive(new TimeValue(600000)));
+        boolean ordered = tableInJoinRequest.getOriginalSelect().isOrderdSelect();
+        if (!ordered) {
+          request.addSort(DOC_FIELD_NAME, ASC);
+        }
+        response = request.get();
       } else {
         response =
             client

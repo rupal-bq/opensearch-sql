@@ -126,15 +126,20 @@ public class NestedLoopsElasticExecutor extends ElasticJoinExecutor {
               clusterState.getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER);
 
           if (paginationWithSearchAfter) {
-            firstTableResponse =
+            SearchRequestBuilder request =
                 this.nestedLoopsRequest
                     .getFirstTable()
                     .getRequestBuilder()
                     .searchAfter(firstTableResponse.getHits().getSortFields())
                     .setPointInTime(
                         new PointInTimeBuilder(firstTableResponse.pointInTimeId())
-                            .setKeepAlive(new TimeValue(600000)))
-                    .get();
+                            .setKeepAlive(new TimeValue(600000)));
+            boolean ordered =
+                this.nestedLoopsRequest.getFirstTable().getOriginalSelect().isOrderdSelect();
+            if (!ordered) {
+              request.addSort(DOC_FIELD_NAME, ASC);
+            }
+            firstTableResponse = request.get();
           } else {
             firstTableResponse =
                 client
@@ -300,7 +305,6 @@ public class NestedLoopsElasticExecutor extends ElasticJoinExecutor {
               secondTableRequest.setPointInTime(
                   new PointInTimeBuilder(createPitResponse.getId())
                       .setKeepAlive(new TimeValue(600000)));
-              secondTableRequest.addSort(DOC_FIELD_NAME, ASC);
             }
 
             @Override
@@ -308,6 +312,11 @@ public class NestedLoopsElasticExecutor extends ElasticJoinExecutor {
               LOG.error("Error happened while creating PIT" + e);
             }
           });
+
+      boolean ordered = secondTableSelect.isOrderdSelect();
+      if (!ordered) {
+        secondTableRequest.addSort(DOC_FIELD_NAME, ASC);
+      }
 
       multiSearchRequest.add(secondTableRequest);
     }
