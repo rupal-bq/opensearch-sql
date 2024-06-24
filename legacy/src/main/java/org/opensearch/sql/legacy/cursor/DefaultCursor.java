@@ -16,9 +16,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.Setter;
+import org.apache.lucene.search.SortField;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.opensearch.sql.legacy.esdomain.LocalClusterState;
 import org.opensearch.sql.legacy.executor.format.Schema;
+
+import static org.opensearch.sql.common.setting.Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER;
 
 /**
  * Minimum metdata that will be serialized for generating cursorId for<br>
@@ -40,6 +44,8 @@ public class DefaultCursor implements Cursor {
   private static final String SCROLL_ID = "s";
   private static final String SCHEMA_COLUMNS = "c";
   private static final String FIELD_ALIAS_MAP = "a";
+  private static final String PIT_ID = "p";
+  private static final String SORT_FILEDS = "h";
 
   /**
    * To get mappings for index to check if type is date needed for
@@ -70,6 +76,12 @@ public class DefaultCursor implements Cursor {
   /** To get next batch of result */
   private String scrollId;
 
+  /** To get Point In Time */
+  private String pitId;
+
+  /** To get next batch of result with search after api */
+  private SortField[] sortFields;
+
   /** To reduce the number of rows left by fetchSize */
   @NonNull private Integer fetchSize;
 
@@ -89,9 +101,14 @@ public class DefaultCursor implements Cursor {
     json.put(FETCH_SIZE, fetchSize);
     json.put(ROWS_LEFT, rowsLeft);
     json.put(INDEX_PATTERN, indexPattern);
-    json.put(SCROLL_ID, scrollId);
     json.put(SCHEMA_COLUMNS, getSchemaAsJson());
     json.put(FIELD_ALIAS_MAP, fieldAliasMap);
+    if (LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER)) {
+      json.put(PIT_ID, pitId);
+      json.put(SORT_FILEDS, sortFields);
+    } else {
+      json.put(SCROLL_ID, scrollId);
+    }
     return String.format("%s:%s", type.getId(), encodeCursor(json));
   }
 
@@ -105,7 +122,12 @@ public class DefaultCursor implements Cursor {
     cursor.setFetchSize(json.getInt(FETCH_SIZE));
     cursor.setRowsLeft(json.getLong(ROWS_LEFT));
     cursor.setIndexPattern(json.getString(INDEX_PATTERN));
-    cursor.setScrollId(json.getString(SCROLL_ID));
+    if (LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER)) {
+      cursor.setPitId(json.getString(PIT_ID));
+      cursor.setSortFields((SortField[]) json.get(SORT_FILEDS));
+    } else {
+      cursor.setScrollId(json.getString(SCROLL_ID));
+    }
     cursor.setColumns(getColumnsFromSchema(json.getJSONArray(SCHEMA_COLUMNS)));
     cursor.setFieldAliasMap(fieldAliasMap(json.getJSONObject(FIELD_ALIAS_MAP)));
 

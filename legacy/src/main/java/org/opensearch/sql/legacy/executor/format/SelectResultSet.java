@@ -578,6 +578,7 @@ public class SelectResultSet extends ResultSet {
     cursor.setIndexPattern(indexName);
     cursor.setFieldAliasMap(fieldAliasMap());
     cursor.setColumns(columns);
+    cursor.setSortFields();
     this.totalHits = limit != null && limit < internalTotalHits ? limit : internalTotalHits;
   }
 
