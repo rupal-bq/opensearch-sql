@@ -8,10 +8,10 @@ package org.opensearch.sql.legacy.pit;
 /** Point In Time */
 public interface PIT {
   /** Create Point In Time */
-  void create();
+  String create();
 
   /** Delete Point In Time */
-  void delete();
+  boolean delete();
 
   /** Get Point In Time Identifier */
   String getPitId();

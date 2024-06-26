@@ -24,6 +24,8 @@ public class PointInTimeHandler implements PIT {
   private String[] indices;
   @Getter private String pitId;
   private static final Logger LOG = LogManager.getLogger();
+  @Getter
+  private boolean deletePitStatus;
 
   /**
    * Constructor for class
@@ -36,9 +38,14 @@ public class PointInTimeHandler implements PIT {
     this.indices = indices;
   }
 
+  public PointInTimeHandler(Client client, String pitId) {
+    this.client = client;
+    this.pitId = pitId;
+  }
+
   /** Create PIT for given indices */
   @Override
-  public void create() {
+  public String create() {
     CreatePitRequest createPitRequest =
         new CreatePitRequest(
             LocalClusterState.state().getSettingValue(SQL_CURSOR_KEEP_ALIVE), false, indices);
@@ -55,18 +62,23 @@ public class PointInTimeHandler implements PIT {
             LOG.error("Error occurred while creating PIT", e);
           }
         });
+    return pitId;
   }
 
   /** Delete PIT */
   @Override
-  public void delete() {
+  public boolean delete() {
     DeletePitRequest deletePitRequest = new DeletePitRequest(pitId);
     client.deletePits(
         deletePitRequest,
         new ActionListener<>() {
           @Override
           public void onResponse(DeletePitResponse deletePitResponse) {
-            LOG.debug(deletePitResponse);
+            if(deletePitResponse.status().getStatus() == 200) {
+              deletePitStatus = true;
+            } else {
+              deletePitStatus = false;
+            }
           }
 
           @Override
@@ -74,5 +86,6 @@ public class PointInTimeHandler implements PIT {
             LOG.error("Error occurred while deleting PIT", e);
           }
         });
+    return deletePitStatus;
   }
 }
