@@ -13,21 +13,31 @@ import org.apache.logging.log4j.Logger;
 import org.opensearch.action.search.CreatePitRequest;
 import org.opensearch.action.search.CreatePitResponse;
 import org.opensearch.action.search.DeletePitRequest;
+import org.opensearch.action.search.DeletePitResponse;
 import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.sql.legacy.esdomain.LocalClusterState;
 
-public class PointInTimeHandler {
+/** Handler for Point In Time */
+public class PointInTimeHandler implements PIT {
   private Client client;
   private String[] indices;
   @Getter private String pitId;
   private static final Logger LOG = LogManager.getLogger();
 
+  /**
+   * Constructor for class
+   *
+   * @param client OpenSearch client
+   * @param indices list of indices
+   */
   public PointInTimeHandler(Client client, String[] indices) {
     this.client = client;
     this.indices = indices;
   }
 
+  /** Create PIT for given indices */
+  @Override
   public void create() {
     CreatePitRequest createPitRequest =
         new CreatePitRequest(
@@ -47,13 +57,15 @@ public class PointInTimeHandler {
         });
   }
 
+  /** Delete PIT */
+  @Override
   public void delete() {
     DeletePitRequest deletePitRequest = new DeletePitRequest(pitId);
     client.deletePits(
         deletePitRequest,
         new ActionListener<>() {
           @Override
-          public void onResponse(org.opensearch.action.search.DeletePitResponse deletePitResponse) {
+          public void onResponse(DeletePitResponse deletePitResponse) {
             LOG.debug(deletePitResponse);
           }
 
