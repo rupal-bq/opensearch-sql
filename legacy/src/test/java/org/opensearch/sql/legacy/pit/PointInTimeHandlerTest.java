@@ -37,7 +37,7 @@ public class PointInTimeHandlerTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    pointInTimeHandler = new PointInTimeHandler(mockClient, indices);
+    pointInTimeHandler = new PointInTimeHandlerImpl(mockClient, indices);
   }
 
   @Test
@@ -66,7 +66,7 @@ public class PointInTimeHandlerTest {
   }
 
   @Test
-  public void testDelete() {
+  public void testDelete() throws InterruptedException {
     DeletePitResponse mockedResponse = mock(DeletePitResponse.class);
     pointInTimeHandler.delete();
     verify(mockClient).deletePits(any(), listenerCaptor.capture());

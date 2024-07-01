@@ -5,11 +5,11 @@
 
 package org.opensearch.sql.legacy.cursor;
 
+import static org.opensearch.sql.common.setting.Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER;
+
 import org.apache.lucene.search.SortField;
 import org.json.JSONObject;
 import org.opensearch.sql.legacy.esdomain.LocalClusterState;
-
-import static org.opensearch.sql.common.setting.Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER;
 
 public class Paginate {
 

@@ -5,6 +5,8 @@
 
 package org.opensearch.sql.legacy.cursor;
 
+import static org.opensearch.sql.common.setting.Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER;
+
 import com.google.common.base.Strings;
 import java.util.Base64;
 import java.util.HashMap;
@@ -21,8 +23,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.opensearch.sql.legacy.esdomain.LocalClusterState;
 import org.opensearch.sql.legacy.executor.format.Schema;
-
-import static org.opensearch.sql.common.setting.Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER;
 
 /**
  * Minimum metdata that will be serialized for generating cursorId for<br>

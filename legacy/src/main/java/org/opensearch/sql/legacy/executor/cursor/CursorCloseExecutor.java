@@ -14,10 +14,7 @@ import org.apache.logging.log4j.Logger;
 import org.json.JSONException;
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.search.ClearScrollResponse;
-import org.opensearch.action.search.DeletePitRequest;
-import org.opensearch.action.search.DeletePitResponse;
 import org.opensearch.client.Client;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.sql.legacy.cursor.CursorType;
@@ -25,8 +22,8 @@ import org.opensearch.sql.legacy.cursor.DefaultCursor;
 import org.opensearch.sql.legacy.esdomain.LocalClusterState;
 import org.opensearch.sql.legacy.metrics.MetricName;
 import org.opensearch.sql.legacy.metrics.Metrics;
-import org.opensearch.sql.legacy.pit.PIT;
 import org.opensearch.sql.legacy.pit.PointInTimeHandler;
+import org.opensearch.sql.legacy.pit.PointInTimeHandlerImpl;
 import org.opensearch.sql.legacy.rewriter.matchtoterm.VerificationException;
 
 public class CursorCloseExecutor implements CursorRestExecutor {
@@ -87,20 +84,19 @@ public class CursorCloseExecutor implements CursorRestExecutor {
 
   private String handleDefaultCursorCloseRequest(Client client, DefaultCursor cursor) {
     if (LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER)) {
-      String scrollId = cursor.getScrollId();
-      ClearScrollResponse clearScrollResponse =
-          client.prepareClearScroll().addScrollId(scrollId).get();
-      if (clearScrollResponse.isSucceeded()) {
+      String pitId = cursor.getPitId();
+      PointInTimeHandler pit = new PointInTimeHandlerImpl(client, pitId);
+      if (pit.delete()) {
         return SUCCEEDED_TRUE;
       } else {
         Metrics.getInstance().getNumericalMetric(MetricName.FAILED_REQ_COUNT_SYS).increment();
         return SUCCEEDED_FALSE;
       }
-    }
-    else {
-      String pitId  = cursor.getPitId();
-      PIT pit = new PointInTimeHandler(client, pitId);
-      if(pit.delete()) {
+    } else {
+      String scrollId = cursor.getScrollId();
+      ClearScrollResponse clearScrollResponse =
+          client.prepareClearScroll().addScrollId(scrollId).get();
+      if (clearScrollResponse.isSucceeded()) {
         return SUCCEEDED_TRUE;
       } else {
         Metrics.getInstance().getNumericalMetric(MetricName.FAILED_REQ_COUNT_SYS).increment();
