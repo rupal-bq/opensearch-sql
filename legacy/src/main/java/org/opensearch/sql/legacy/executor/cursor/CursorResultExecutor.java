@@ -14,6 +14,7 @@ import org.apache.logging.log4j.Logger;
 import org.json.JSONException;
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.search.ClearScrollResponse;
+import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.unit.TimeValue;
@@ -21,6 +22,7 @@ import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.builder.PointInTimeBuilder;
 import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.legacy.cursor.CursorType;
 import org.opensearch.sql.legacy.cursor.DefaultCursor;
@@ -29,6 +31,8 @@ import org.opensearch.sql.legacy.executor.Format;
 import org.opensearch.sql.legacy.executor.format.Protocol;
 import org.opensearch.sql.legacy.metrics.MetricName;
 import org.opensearch.sql.legacy.metrics.Metrics;
+import org.opensearch.sql.legacy.pit.PointInTimeHandler;
+import org.opensearch.sql.legacy.pit.PointInTimeHandlerImpl;
 import org.opensearch.sql.legacy.rewriter.matchtoterm.VerificationException;
 
 public class CursorResultExecutor implements CursorRestExecutor {
@@ -91,14 +95,27 @@ public class CursorResultExecutor implements CursorRestExecutor {
   }
 
   private String handleDefaultCursorRequest(Client client, DefaultCursor cursor) {
-    String previousScrollId = cursor.getScrollId();
     LocalClusterState clusterState = LocalClusterState.state();
-    TimeValue scrollTimeout = clusterState.getSettingValue(Settings.Key.SQL_CURSOR_KEEP_ALIVE);
-    SearchResponse scrollResponse =
-        client.prepareSearchScroll(previousScrollId).setScroll(scrollTimeout).get();
+    TimeValue paginationTimeout = clusterState.getSettingValue(Settings.Key.SQL_CURSOR_KEEP_ALIVE);
+
+    SearchResponse scrollResponse = null;
+    if (clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER)) {
+      String pitId = cursor.getPitId();
+      SearchRequestBuilder request = cursor.getSearchRequestBuilder();
+      Object[] sortFields = cursor.getSortFields();
+      request.setPointInTime(new PointInTimeBuilder(pitId));
+      request.searchAfter(sortFields);
+      scrollResponse = request.get();
+    } else {
+      String previousScrollId = cursor.getScrollId();
+      scrollResponse =
+          client.prepareSearchScroll(previousScrollId).setScroll(paginationTimeout).get();
+    }
+
     SearchHits searchHits = scrollResponse.getHits();
     SearchHit[] searchHitArray = searchHits.getHits();
     String newScrollId = scrollResponse.getScrollId();
+    String newPitId = scrollResponse.pointInTimeId();
 
     int rowsLeft = (int) cursor.getRowsLeft();
     int fetch = cursor.getFetchSize();
@@ -124,16 +141,31 @@ public class CursorResultExecutor implements CursorRestExecutor {
 
     if (rowsLeft <= 0) {
       /** Clear the scroll context on last page */
-      ClearScrollResponse clearScrollResponse =
-          client.prepareClearScroll().addScrollId(newScrollId).get();
-      if (!clearScrollResponse.isSucceeded()) {
-        Metrics.getInstance().getNumericalMetric(MetricName.FAILED_REQ_COUNT_SYS).increment();
-        LOG.info("Error closing the cursor context {} ", newScrollId);
+      if (newScrollId != null) {
+        ClearScrollResponse clearScrollResponse =
+            client.prepareClearScroll().addScrollId(newScrollId).get();
+        if (!clearScrollResponse.isSucceeded()) {
+          Metrics.getInstance().getNumericalMetric(MetricName.FAILED_REQ_COUNT_SYS).increment();
+          LOG.info("Error closing the cursor context {} ", newScrollId);
+        }
+      }
+      if (newPitId != null) {
+        PointInTimeHandler pit = new PointInTimeHandlerImpl(client, newPitId);
+        if (!pit.delete()) {
+          Metrics.getInstance().getNumericalMetric(MetricName.FAILED_REQ_COUNT_SYS).increment();
+          LOG.info("Error deleting point in time {} ", newPitId);
+        }
       }
     }
 
     cursor.setRowsLeft(rowsLeft);
-    cursor.setScrollId(newScrollId);
+    if (clusterState.getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER)) {
+      cursor.setPitId(newPitId);
+      cursor.setSearchRequestBuilder(cursor.getSearchRequestBuilder());
+      cursor.setSortFields(Arrays.stream(scrollResponse.getHits().getSortFields()).toArray());
+    } else {
+      cursor.setScrollId(newScrollId);
+    }
     Protocol protocol = new Protocol(client, searchHits, format.name().toLowerCase(), cursor);
     return protocol.cursorFormat();
   }

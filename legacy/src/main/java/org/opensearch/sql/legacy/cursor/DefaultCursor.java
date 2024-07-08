@@ -7,7 +7,9 @@ package org.opensearch.sql.legacy.cursor;
 
 import static org.opensearch.sql.common.setting.Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Strings;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -18,9 +20,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.Setter;
-import org.apache.lucene.search.SortField;
+import lombok.SneakyThrows;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.opensearch.action.search.SearchRequestBuilder;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.sql.legacy.esdomain.LocalClusterState;
 import org.opensearch.sql.legacy.executor.format.Schema;
 
@@ -45,7 +49,8 @@ public class DefaultCursor implements Cursor {
   private static final String SCHEMA_COLUMNS = "c";
   private static final String FIELD_ALIAS_MAP = "a";
   private static final String PIT_ID = "p";
-  private static final String SORT_FILEDS = "h";
+  private static final String SEARCH_REQUEST_BUILDER = "r";
+  private static final String SORT_FIELDS = "h";
 
   /**
    * To get mappings for index to check if type is date needed for
@@ -80,7 +85,10 @@ public class DefaultCursor implements Cursor {
   private String pitId;
 
   /** To get next batch of result with search after api */
-  private SortField[] sortFields;
+  public SearchRequestBuilder searchRequestBuilder;
+
+  private SearchResponse searchResponse;
+  private Object[] sortFields;
 
   /** To reduce the number of rows left by fetchSize */
   @NonNull private Integer fetchSize;
@@ -94,7 +102,8 @@ public class DefaultCursor implements Cursor {
 
   @Override
   public String generateCursorId() {
-    if (rowsLeft <= 0 || Strings.isNullOrEmpty(scrollId)) {
+    boolean isCursorValid = LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER) ? Strings.isNullOrEmpty(pitId) : Strings.isNullOrEmpty(scrollId);
+    if (rowsLeft <= 0 || isCursorValid) {
       return null;
     }
     JSONObject json = new JSONObject();
@@ -105,7 +114,8 @@ public class DefaultCursor implements Cursor {
     json.put(FIELD_ALIAS_MAP, fieldAliasMap);
     if (LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER)) {
       json.put(PIT_ID, pitId);
-      json.put(SORT_FILEDS, sortFields);
+      json.put(SORT_FIELDS, getSortFieldsAsJson());
+      json.put(SEARCH_REQUEST_BUILDER, getSearchRequestBuilderAsJson());
     } else {
       json.put(SCROLL_ID, scrollId);
     }
@@ -124,7 +134,9 @@ public class DefaultCursor implements Cursor {
     cursor.setIndexPattern(json.getString(INDEX_PATTERN));
     if (LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER)) {
       cursor.setPitId(json.getString(PIT_ID));
-      cursor.setSortFields((SortField[]) json.get(SORT_FILEDS));
+      cursor.setSearchRequestBuilder(
+          getSearchRequestBuilder(json.getString(SEARCH_REQUEST_BUILDER)));
+      cursor.setSortFields(getSortFieldsArray(json.getJSONArray(SORT_FIELDS)));
     } else {
       cursor.setScrollId(json.getString(SCROLL_ID));
     }
@@ -181,5 +193,27 @@ public class DefaultCursor implements Cursor {
                 })
             .collect(Collectors.toList());
     return columns;
+  }
+
+  private static Object[] getSortFieldsArray(JSONArray sortFields) {
+    Object[] fields = new Object[sortFields.length()];
+    Arrays.setAll(fields, sortFields::get);
+    return fields;
+  }
+
+  private JSONArray getSortFieldsAsJson() {
+    return new JSONArray(sortFields);
+  }
+
+  @SneakyThrows
+  private String getSearchRequestBuilderAsJson() {
+    ObjectMapper objectMapper = new ObjectMapper();
+    return objectMapper.writeValueAsString(searchRequestBuilder);
+  }
+
+  @SneakyThrows
+  private static SearchRequestBuilder getSearchRequestBuilder(String json) {
+    ObjectMapper objectMapper = new ObjectMapper();
+    return objectMapper.readValue(json, SearchRequestBuilder.class);
   }
 }

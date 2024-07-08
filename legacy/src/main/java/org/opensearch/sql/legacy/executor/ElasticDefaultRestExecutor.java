@@ -13,6 +13,7 @@ import org.apache.logging.log4j.Logger;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.admin.indices.get.GetIndexRequest;
 import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchScrollRequest;
 import org.opensearch.client.Client;
@@ -24,11 +25,15 @@ import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.action.RestStatusToXContentListener;
 import org.opensearch.search.SearchHits;
+import org.opensearch.sql.common.setting.Settings;
+import org.opensearch.sql.legacy.esdomain.LocalClusterState;
 import org.opensearch.sql.legacy.exception.SqlParseException;
 import org.opensearch.sql.legacy.executor.join.ElasticJoinExecutor;
 import org.opensearch.sql.legacy.executor.join.ElasticUtils;
 import org.opensearch.sql.legacy.executor.join.MetaSearchResult;
 import org.opensearch.sql.legacy.executor.multi.MultiRequestExecutorFactory;
+import org.opensearch.sql.legacy.pit.PointInTimeHandler;
+import org.opensearch.sql.legacy.pit.PointInTimeHandlerImpl;
 import org.opensearch.sql.legacy.query.QueryAction;
 import org.opensearch.sql.legacy.query.SqlElasticRequestBuilder;
 import org.opensearch.sql.legacy.query.join.JoinRequestBuilder;
@@ -68,6 +73,10 @@ public class ElasticDefaultRestExecutor implements RestExecutor {
       executor.run();
       sendDefaultResponse(executor.getHits(), channel);
     } else if (request instanceof SearchRequest) {
+/*      if (LocalClusterState.state().getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER) && ) {
+        PointInTimeHandler pit = new PointInTimeHandlerImpl(client, queryAction.query.getIndexArr());
+        pit.create();
+      }*/
       client.search((SearchRequest) request, new RestStatusToXContentListener<>(channel));
     } else if (request instanceof DeleteByQueryRequest) {
       requestBuilder
