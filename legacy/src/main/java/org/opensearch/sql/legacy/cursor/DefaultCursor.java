@@ -5,10 +5,15 @@
 
 package org.opensearch.sql.legacy.cursor;
 
+import static org.opensearch.core.xcontent.DeprecationHandler.IGNORE_DEPRECATIONS;
 import static org.opensearch.sql.common.setting.Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Strings;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
@@ -23,8 +28,16 @@ import lombok.Setter;
 import lombok.SneakyThrows;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.search.SearchModule;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.sql.legacy.esdomain.LocalClusterState;
 import org.opensearch.sql.legacy.executor.format.Schema;
 
@@ -49,7 +62,7 @@ public class DefaultCursor implements Cursor {
   private static final String SCHEMA_COLUMNS = "c";
   private static final String FIELD_ALIAS_MAP = "a";
   private static final String PIT_ID = "p";
-  private static final String SEARCH_REQUEST_BUILDER = "r";
+  private static final String SEARCH_REQUEST = "r";
   private static final String SORT_FIELDS = "h";
 
   /**
@@ -85,7 +98,8 @@ public class DefaultCursor implements Cursor {
   private String pitId;
 
   /** To get next batch of result with search after api */
-  public SearchRequestBuilder searchRequestBuilder;
+  public SearchSourceBuilder searchSourceBuilder;
+  //private String query;
 
   private SearchResponse searchResponse;
   private Object[] sortFields;
@@ -100,6 +114,15 @@ public class DefaultCursor implements Cursor {
     return type;
   }
 
+  /**
+   * {@link NamedXContentRegistry} from {@link SearchModule} used for construct {@link QueryBuilder} from DSL query string.
+   */
+  private final static NamedXContentRegistry
+      xContentRegistry =
+      new NamedXContentRegistry(new SearchModule(Settings.builder().build(),
+          new ArrayList<>()).getNamedXContents());
+
+  @SneakyThrows
   @Override
   public String generateCursorId() {
     boolean isCursorValid = LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER) ? Strings.isNullOrEmpty(pitId) : Strings.isNullOrEmpty(scrollId);
@@ -114,29 +137,33 @@ public class DefaultCursor implements Cursor {
     json.put(FIELD_ALIAS_MAP, fieldAliasMap);
     if (LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER)) {
       json.put(PIT_ID, pitId);
-      json.put(SORT_FIELDS, getSortFieldsAsJson());
-      json.put(SEARCH_REQUEST_BUILDER, getSearchRequestBuilderAsJson());
+      //json.put(SEARCH_REQUEST, query);
     } else {
       json.put(SCROLL_ID, scrollId);
     }
-    return String.format("%s:%s", type.getId(), encodeCursor(json));
+    return String.format("%s:%s", type.getId(), encodeCursor(json, searchSourceBuilder));
   }
 
+  @SneakyThrows
   public static DefaultCursor from(String cursorId) {
     /**
      * It is assumed that cursorId here is the second part of the original cursor passed by the
      * client after removing first part which identifies cursor type
      */
-    JSONObject json = decodeCursor(cursorId);
+    String[] parts = cursorId.split(":::");
+    JSONObject json = decodeCursor(parts[0]);
     DefaultCursor cursor = new DefaultCursor();
     cursor.setFetchSize(json.getInt(FETCH_SIZE));
     cursor.setRowsLeft(json.getLong(ROWS_LEFT));
     cursor.setIndexPattern(json.getString(INDEX_PATTERN));
     if (LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER)) {
       cursor.setPitId(json.getString(PIT_ID));
-      cursor.setSearchRequestBuilder(
-          getSearchRequestBuilder(json.getString(SEARCH_REQUEST_BUILDER)));
-      cursor.setSortFields(getSortFieldsArray(json.getJSONArray(SORT_FIELDS)));
+      //cursor.setQuery(json.getString(SEARCH_REQUEST));
+      byte[] bytes = Base64.getDecoder().decode(parts[1]);
+      ByteArrayInputStream streamInput = new ByteArrayInputStream(bytes);
+      XContentParser parser = XContentType.JSON.xContent().createParser(xContentRegistry, IGNORE_DEPRECATIONS, streamInput);
+      SearchSourceBuilder sourceBuilder = SearchSourceBuilder.fromXContent(parser);
+      cursor.searchSourceBuilder = sourceBuilder;
     } else {
       cursor.setScrollId(json.getString(SCROLL_ID));
     }
@@ -166,8 +193,18 @@ public class DefaultCursor implements Cursor {
     return entry;
   }
 
-  private static String encodeCursor(JSONObject cursorJson) {
-    return Base64.getEncoder().encodeToString(cursorJson.toString().getBytes());
+  @SneakyThrows
+  private static String encodeCursor(JSONObject cursorJson, SearchSourceBuilder sourceBuilder) {
+    String jsonBase64 = Base64.getEncoder().encodeToString(cursorJson.toString().getBytes());
+
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    XContentBuilder builder = XContentFactory.jsonBuilder(outputStream);
+    sourceBuilder.toXContent(builder, null);
+    builder.close();
+
+    String searchRequestBase64 = Base64.getEncoder().encodeToString(outputStream.toByteArray());
+
+    return jsonBase64 + ":::" + searchRequestBase64;
   }
 
   private static JSONObject decodeCursor(String cursorId) {
@@ -200,7 +237,7 @@ public class DefaultCursor implements Cursor {
     Arrays.setAll(fields, sortFields::get);
     return fields;
   }
-
+/*
   private JSONArray getSortFieldsAsJson() {
     return new JSONArray(sortFields);
   }
@@ -215,5 +252,5 @@ public class DefaultCursor implements Cursor {
   private static SearchRequestBuilder getSearchRequestBuilder(String json) {
     ObjectMapper objectMapper = new ObjectMapper();
     return objectMapper.readValue(json, SearchRequestBuilder.class);
-  }
+  }*/
 }

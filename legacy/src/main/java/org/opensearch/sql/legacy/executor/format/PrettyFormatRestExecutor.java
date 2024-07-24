@@ -119,8 +119,10 @@ public class PrettyFormatRestExecutor implements RestExecutor {
       defaultCursor.setFetchSize(queryAction.getSqlRequest().fetchSize());
       if(LocalClusterState.state().getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER)) {
         defaultCursor.setPitId(pit.getPitId());
-        defaultCursor.setSearchRequestBuilder(queryAction.getRequestBuilder());
-        defaultCursor.setSortFields(response.getHits().getHits().);
+        defaultCursor.setQuery(queryAction.getRequestBuilder().toString());
+        //defaultCursor.setSearchRequest(queryAction.getRequestBuilder().request().source());
+        //defaultCursor.setSearchSourceBuilder(queryAction.getRequestBuilder().request().source());
+        //defaultCursor.setSortFields(response.getHits().getSortFields());
       } else {
         defaultCursor.setScrollId(response.getScrollId());
       }
