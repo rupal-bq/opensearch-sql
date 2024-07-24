@@ -5,21 +5,16 @@
 
 package org.opensearch.sql.legacy.executor.format;
 
-import java.util.Arrays;
-import java.util.Map;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.OpenSearchException;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.core.common.Strings;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.search.builder.PointInTimeBuilder;
-import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.legacy.cursor.Cursor;
 import org.opensearch.sql.legacy.cursor.DefaultCursor;
 import org.opensearch.sql.legacy.esdomain.LocalClusterState;
@@ -32,6 +27,8 @@ import org.opensearch.sql.legacy.query.DefaultQueryAction;
 import org.opensearch.sql.legacy.query.QueryAction;
 import org.opensearch.sql.legacy.query.SqlOpenSearchRequestBuilder;
 import org.opensearch.sql.legacy.query.join.BackOffRetryStrategy;
+
+import static org.opensearch.sql.common.setting.Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER;
 
 public class PrettyFormatRestExecutor implements RestExecutor {
 
@@ -102,7 +99,7 @@ public class PrettyFormatRestExecutor implements RestExecutor {
     PointInTimeHandler pit = null;
     SearchResponse response;
     SqlOpenSearchRequestBuilder sqlOpenSearchRequestBuilder = queryAction.explain();
-    if(LocalClusterState.state().getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER)) {
+    if(LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER)) {
         pit = new PointInTimeHandlerImpl(client, queryAction.getSelect().getIndexArr());
         pit.create();
         SearchRequestBuilder searchRequest = queryAction.getRequestBuilder();
@@ -117,9 +114,9 @@ public class PrettyFormatRestExecutor implements RestExecutor {
       DefaultCursor defaultCursor = new DefaultCursor();
       defaultCursor.setLimit(queryAction.getSelect().getRowCount());
       defaultCursor.setFetchSize(queryAction.getSqlRequest().fetchSize());
-      if(LocalClusterState.state().getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER)) {
+      if(LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER)) {
         defaultCursor.setPitId(pit.getPitId());
-        defaultCursor.setQuery(queryAction.getRequestBuilder().toString());
+        defaultCursor.setSearchSourceBuilder(queryAction.getRequestBuilder().request().source());
         //defaultCursor.setSearchRequest(queryAction.getRequestBuilder().request().source());
         //defaultCursor.setSearchSourceBuilder(queryAction.getRequestBuilder().request().source());
         //defaultCursor.setSortFields(response.getHits().getSortFields());
@@ -135,7 +132,7 @@ public class PrettyFormatRestExecutor implements RestExecutor {
   }
 
   private boolean isDefaultCursor(SearchResponse searchResponse, DefaultQueryAction queryAction) {
-    if(LocalClusterState.state().getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER)) {
+    if(LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER)) {
       if(searchResponse.getHits().getTotalHits().value < queryAction.getSqlRequest().fetchSize()) {
         return false;
       } else {
