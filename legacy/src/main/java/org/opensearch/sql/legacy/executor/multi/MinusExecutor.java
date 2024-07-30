@@ -123,7 +123,6 @@ public class MinusExecutor extends ElasticHitsExecutor {
         pit.delete();
       }
     }
-    pit.delete();
   }
 
   @Override

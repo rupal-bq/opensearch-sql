@@ -68,10 +68,6 @@ public class ElasticDefaultRestExecutor implements RestExecutor {
       executor.run();
       sendDefaultResponse(executor.getHits(), channel);
     } else if (request instanceof SearchRequest) {
-      /*      if (LocalClusterState.state().getSettingValue(Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER) && ) {
-        PointInTimeHandler pit = new PointInTimeHandlerImpl(client, queryAction.query.getIndexArr());
-        pit.create();
-      }*/
       client.search((SearchRequest) request, new RestStatusToXContentListener<>(channel));
     } else if (request instanceof DeleteByQueryRequest) {
       requestBuilder
