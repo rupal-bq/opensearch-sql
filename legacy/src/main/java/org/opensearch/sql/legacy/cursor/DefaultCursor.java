@@ -8,13 +8,14 @@ package org.opensearch.sql.legacy.cursor;
 import static org.opensearch.core.xcontent.DeprecationHandler.IGNORE_DEPRECATIONS;
 import static org.opensearch.sql.common.setting.Settings.Key.SQL_PAGINATION_API_SEARCH_AFTER;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Strings;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.nio.charset.StandardCharsets;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -64,6 +65,7 @@ public class DefaultCursor implements Cursor {
   private static final String PIT_ID = "p";
   private static final String SEARCH_REQUEST = "r";
   private static final String SORT_FIELDS = "h";
+  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   /**
    * To get mappings for index to check if type is date needed for
@@ -99,7 +101,6 @@ public class DefaultCursor implements Cursor {
 
   /** To get next batch of result with search after api */
   public SearchSourceBuilder searchSourceBuilder;
-  //private String query;
 
   private SearchResponse searchResponse;
   private Object[] sortFields;
@@ -115,17 +116,20 @@ public class DefaultCursor implements Cursor {
   }
 
   /**
-   * {@link NamedXContentRegistry} from {@link SearchModule} used for construct {@link QueryBuilder} from DSL query string.
+   * {@link NamedXContentRegistry} from {@link SearchModule} used for construct {@link QueryBuilder}
+   * from DSL query string.
    */
-  private final static NamedXContentRegistry
-      xContentRegistry =
-      new NamedXContentRegistry(new SearchModule(Settings.builder().build(),
-          new ArrayList<>()).getNamedXContents());
+  private static final NamedXContentRegistry xContentRegistry =
+      new NamedXContentRegistry(
+          new SearchModule(Settings.builder().build(), new ArrayList<>()).getNamedXContents());
 
   @SneakyThrows
   @Override
   public String generateCursorId() {
-    boolean isCursorValid = LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER) ? Strings.isNullOrEmpty(pitId) : Strings.isNullOrEmpty(scrollId);
+    boolean isCursorValid =
+        LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER)
+            ? Strings.isNullOrEmpty(pitId)
+            : Strings.isNullOrEmpty(scrollId);
     if (rowsLeft <= 0 || isCursorValid) {
       return null;
     }
@@ -137,7 +141,17 @@ public class DefaultCursor implements Cursor {
     json.put(FIELD_ALIAS_MAP, fieldAliasMap);
     if (LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER)) {
       json.put(PIT_ID, pitId);
-      //json.put(SEARCH_REQUEST, query);
+      String sortFieldValue =
+          AccessController.doPrivileged(
+              (PrivilegedAction<String>)
+                  () -> {
+                    try {
+                      return objectMapper.writeValueAsString(sortFields);
+                    } catch (JsonProcessingException e) {
+                      throw new RuntimeException(e);
+                    }
+                  });
+      json.put(SORT_FIELDS, sortFieldValue);
     } else {
       json.put(SCROLL_ID, scrollId);
     }
@@ -158,10 +172,25 @@ public class DefaultCursor implements Cursor {
     cursor.setIndexPattern(json.getString(INDEX_PATTERN));
     if (LocalClusterState.state().getSettingValue(SQL_PAGINATION_API_SEARCH_AFTER)) {
       cursor.setPitId(json.getString(PIT_ID));
-      //cursor.setQuery(json.getString(SEARCH_REQUEST));
+
+      Object[] sortFieldValue =
+          AccessController.doPrivileged(
+              (PrivilegedAction<Object[]>)
+                  () -> {
+                    try {
+                      return objectMapper.readValue(json.getString(SORT_FIELDS), Object[].class);
+                    } catch (JsonProcessingException e) {
+                      throw new RuntimeException(e);
+                    }
+                  });
+      cursor.setSortFields(sortFieldValue);
+
       byte[] bytes = Base64.getDecoder().decode(parts[1]);
       ByteArrayInputStream streamInput = new ByteArrayInputStream(bytes);
-      XContentParser parser = XContentType.JSON.xContent().createParser(xContentRegistry, IGNORE_DEPRECATIONS, streamInput);
+      XContentParser parser =
+          XContentType.JSON
+              .xContent()
+              .createParser(xContentRegistry, IGNORE_DEPRECATIONS, streamInput);
       SearchSourceBuilder sourceBuilder = SearchSourceBuilder.fromXContent(parser);
       cursor.searchSourceBuilder = sourceBuilder;
     } else {
@@ -231,26 +260,4 @@ public class DefaultCursor implements Cursor {
             .collect(Collectors.toList());
     return columns;
   }
-
-  private static Object[] getSortFieldsArray(JSONArray sortFields) {
-    Object[] fields = new Object[sortFields.length()];
-    Arrays.setAll(fields, sortFields::get);
-    return fields;
-  }
-/*
-  private JSONArray getSortFieldsAsJson() {
-    return new JSONArray(sortFields);
-  }
-
-  @SneakyThrows
-  private String getSearchRequestBuilderAsJson() {
-    ObjectMapper objectMapper = new ObjectMapper();
-    return objectMapper.writeValueAsString(searchRequestBuilder);
-  }
-
-  @SneakyThrows
-  private static SearchRequestBuilder getSearchRequestBuilder(String json) {
-    ObjectMapper objectMapper = new ObjectMapper();
-    return objectMapper.readValue(json, SearchRequestBuilder.class);
-  }*/
 }
