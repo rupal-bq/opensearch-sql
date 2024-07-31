@@ -27,9 +27,10 @@ import static org.opensearch.sql.spark.constants.TestConstants.MOCK_STATEMENT_ID
 import static org.opensearch.sql.spark.constants.TestConstants.TEST_CLUSTER_NAME;
 import static org.opensearch.sql.spark.data.constants.SparkConstants.DATA_FIELD;
 import static org.opensearch.sql.spark.data.constants.SparkConstants.ERROR_FIELD;
-import static org.opensearch.sql.spark.data.constants.SparkConstants.FLINT_INDEX_STORE_AUTH_PASSWORD;
-import static org.opensearch.sql.spark.data.constants.SparkConstants.FLINT_INDEX_STORE_AUTH_USERNAME;
-import static org.opensearch.sql.spark.data.constants.SparkConstants.FLINT_INDEX_STORE_AWSREGION_KEY;
+import static org.opensearch.sql.spark.data.constants.SparkConstants.FLINT_INDEX_STORE_AUTH_KEY;
+import static org.opensearch.sql.spark.data.constants.SparkConstants.FLINT_INDEX_STORE_HOST_KEY;
+import static org.opensearch.sql.spark.data.constants.SparkConstants.FLINT_INDEX_STORE_PORT_KEY;
+import static org.opensearch.sql.spark.data.constants.SparkConstants.FLINT_INDEX_STORE_SCHEME_KEY;
 import static org.opensearch.sql.spark.data.constants.SparkConstants.STATUS_FIELD;
 import static org.opensearch.sql.spark.dispatcher.SparkQueryDispatcher.CLUSTER_NAME_TAG_KEY;
 import static org.opensearch.sql.spark.dispatcher.SparkQueryDispatcher.DATASOURCE_TAG_KEY;
@@ -40,11 +41,14 @@ import com.amazonaws.services.emrserverless.model.CancelJobRunResult;
 import com.amazonaws.services.emrserverless.model.GetJobRunResult;
 import com.amazonaws.services.emrserverless.model.JobRun;
 import com.amazonaws.services.emrserverless.model.JobRunState;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.json.JSONObject;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,6 +80,10 @@ import org.opensearch.sql.spark.flint.IndexDMLResultStorageService;
 import org.opensearch.sql.spark.flint.operation.FlintIndexOpFactory;
 import org.opensearch.sql.spark.leasemanager.LeaseManager;
 import org.opensearch.sql.spark.metrics.MetricsService;
+import org.opensearch.sql.spark.parameter.DataSourceSparkParameterComposer;
+import org.opensearch.sql.spark.parameter.GeneralSparkParameterComposer;
+import org.opensearch.sql.spark.parameter.SparkParameterComposerCollection;
+import org.opensearch.sql.spark.parameter.SparkSubmitParametersBuilderProvider;
 import org.opensearch.sql.spark.response.JobExecutionResponseReader;
 import org.opensearch.sql.spark.rest.model.LangType;
 
@@ -83,6 +91,10 @@ import org.opensearch.sql.spark.rest.model.LangType;
 public class SparkQueryDispatcherTest {
 
   public static final String MY_GLUE = "my_glue";
+  public static final String KEY_FROM_COMPOSER = "key.from.composer";
+  public static final String VALUE_FROM_COMPOSER = "value.from.composer";
+  public static final String KEY_FROM_DATASOURCE_COMPOSER = "key.from.datasource.composer";
+  public static final String VALUE_FROM_DATASOURCE_COMPOSER = "value.from.datasource.composer";
   @Mock private EMRServerlessClient emrServerlessClient;
   @Mock private EMRServerlessClientFactory emrServerlessClientFactory;
   @Mock private DataSourceService dataSourceService;
@@ -96,6 +108,22 @@ public class SparkQueryDispatcherTest {
   @Mock private QueryIdProvider queryIdProvider;
   @Mock private AsyncQueryRequestContext asyncQueryRequestContext;
   @Mock private MetricsService metricsService;
+  private DataSourceSparkParameterComposer dataSourceSparkParameterComposer =
+      (datasourceMetadata, sparkSubmitParameters, dispatchQueryRequest, context) -> {
+        sparkSubmitParameters.setConfigItem(FLINT_INDEX_STORE_AUTH_KEY, "basic");
+        sparkSubmitParameters.setConfigItem(FLINT_INDEX_STORE_HOST_KEY, "HOST");
+        sparkSubmitParameters.setConfigItem(FLINT_INDEX_STORE_PORT_KEY, "PORT");
+        sparkSubmitParameters.setConfigItem(FLINT_INDEX_STORE_SCHEME_KEY, "SCHEMA");
+        sparkSubmitParameters.setConfigItem(
+            KEY_FROM_DATASOURCE_COMPOSER, VALUE_FROM_DATASOURCE_COMPOSER);
+      };
+
+  private GeneralSparkParameterComposer generalSparkParameterComposer =
+      (sparkSubmitParameters, dispatchQueryRequest, context) -> {
+        sparkSubmitParameters.setConfigItem(KEY_FROM_COMPOSER, VALUE_FROM_COMPOSER);
+      };
+
+  private SparkSubmitParametersBuilderProvider sparkSubmitParametersBuilderProvider;
 
   @Mock(answer = RETURNS_DEEP_STUBS)
   private Session session;
@@ -111,6 +139,10 @@ public class SparkQueryDispatcherTest {
 
   @BeforeEach
   void setUp() {
+    SparkParameterComposerCollection collection = new SparkParameterComposerCollection();
+    collection.register(DataSourceType.S3GLUE, dataSourceSparkParameterComposer);
+    collection.register(generalSparkParameterComposer);
+    sparkSubmitParametersBuilderProvider = new SparkSubmitParametersBuilderProvider(collection);
     QueryHandlerFactory queryHandlerFactory =
         new QueryHandlerFactory(
             jobExecutionResponseReader,
@@ -120,7 +152,8 @@ public class SparkQueryDispatcherTest {
             indexDMLResultStorageService,
             flintIndexOpFactory,
             emrServerlessClientFactory,
-            metricsService);
+            metricsService,
+            sparkSubmitParametersBuilderProvider);
     sparkQueryDispatcher =
         new SparkQueryDispatcher(
             dataSourceService, sessionManager, queryHandlerFactory, queryIdProvider);
@@ -134,15 +167,7 @@ public class SparkQueryDispatcherTest {
     tags.put(CLUSTER_NAME_TAG_KEY, TEST_CLUSTER_NAME);
     tags.put(JOB_TYPE_TAG_KEY, JobType.BATCH.getText());
     String query = "select * from my_glue.default.http_logs";
-    String sparkSubmitParameters =
-        constructExpectedSparkSubmitParameterString(
-            "sigv4",
-            new HashMap<>() {
-              {
-                put(FLINT_INDEX_STORE_AWSREGION_KEY, "eu-west-1");
-              }
-            },
-            query);
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query);
     StartJobRequest expected =
         new StartJobRequest(
             "TEST_CLUSTER:batch",
@@ -185,16 +210,7 @@ public class SparkQueryDispatcherTest {
     tags.put(CLUSTER_NAME_TAG_KEY, TEST_CLUSTER_NAME);
     tags.put(JOB_TYPE_TAG_KEY, JobType.BATCH.getText());
     String query = "select * from my_glue.default.http_logs";
-    String sparkSubmitParameters =
-        constructExpectedSparkSubmitParameterString(
-            "sigv4",
-            new HashMap<>() {
-              {
-                put(FLINT_INDEX_STORE_AWSREGION_KEY, "eu-west-1");
-              }
-            },
-            query,
-            true);
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query);
     StartJobRequest expected =
         new StartJobRequest(
             "TEST_CLUSTER:batch",
@@ -226,16 +242,7 @@ public class SparkQueryDispatcherTest {
     tags.put(CLUSTER_NAME_TAG_KEY, TEST_CLUSTER_NAME);
     tags.put(JOB_TYPE_TAG_KEY, JobType.BATCH.getText());
     String query = "select * from my_glue.default.http_logs";
-    String sparkSubmitParameters =
-        constructExpectedSparkSubmitParameterString(
-            "basic",
-            new HashMap<>() {
-              {
-                put(FLINT_INDEX_STORE_AUTH_USERNAME, "username");
-                put(FLINT_INDEX_STORE_AUTH_PASSWORD, "password");
-              }
-            },
-            query);
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query);
     StartJobRequest expected =
         new StartJobRequest(
             "TEST_CLUSTER:batch",
@@ -254,45 +261,6 @@ public class SparkQueryDispatcherTest {
     DispatchQueryResponse dispatchQueryResponse =
         sparkQueryDispatcher.dispatch(getBaseDispatchQueryRequest(query), asyncQueryRequestContext);
 
-    verify(emrServerlessClient, times(1)).startJobRun(startJobRequestArgumentCaptor.capture());
-    Assertions.assertEquals(expected, startJobRequestArgumentCaptor.getValue());
-    Assertions.assertEquals(EMR_JOB_ID, dispatchQueryResponse.getJobId());
-    verifyNoInteractions(flintIndexMetadataService);
-  }
-
-  @Test
-  void testDispatchSelectQueryWithNoAuthIndexStoreDatasource() {
-    when(emrServerlessClientFactory.getClient(any())).thenReturn(emrServerlessClient);
-    HashMap<String, String> tags = new HashMap<>();
-    tags.put(DATASOURCE_TAG_KEY, MY_GLUE);
-    tags.put(CLUSTER_NAME_TAG_KEY, TEST_CLUSTER_NAME);
-    tags.put(JOB_TYPE_TAG_KEY, JobType.BATCH.getText());
-    String query = "select * from my_glue.default.http_logs";
-    String sparkSubmitParameters =
-        constructExpectedSparkSubmitParameterString(
-            "noauth",
-            new HashMap<>() {
-              {
-              }
-            },
-            query);
-    StartJobRequest expected =
-        new StartJobRequest(
-            "TEST_CLUSTER:batch",
-            null,
-            EMRS_APPLICATION_ID,
-            EMRS_EXECUTION_ROLE,
-            sparkSubmitParameters,
-            tags,
-            false,
-            "query_execution_result_my_glue");
-    when(emrServerlessClient.startJobRun(expected)).thenReturn(EMR_JOB_ID);
-    DataSourceMetadata dataSourceMetadata = constructMyGlueDataSourceMetadataWithNoAuth();
-    when(dataSourceService.verifyDataSourceAccessAndGetRawMetadata(MY_GLUE))
-        .thenReturn(dataSourceMetadata);
-
-    DispatchQueryResponse dispatchQueryResponse =
-        sparkQueryDispatcher.dispatch(getBaseDispatchQueryRequest(query), asyncQueryRequestContext);
     verify(emrServerlessClient, times(1)).startJobRun(startJobRequestArgumentCaptor.capture());
     Assertions.assertEquals(expected, startJobRequestArgumentCaptor.getValue());
     Assertions.assertEquals(EMR_JOB_ID, dispatchQueryResponse.getJobId());
@@ -377,16 +345,7 @@ public class SparkQueryDispatcherTest {
     String query =
         "CREATE INDEX elb_and_requestUri ON my_glue.default.http_logs(l_orderkey, l_quantity) WITH"
             + " (auto_refresh = true)";
-    String sparkSubmitParameters =
-        withStructuredStreaming(
-            constructExpectedSparkSubmitParameterString(
-                "sigv4",
-                new HashMap<>() {
-                  {
-                    put(FLINT_INDEX_STORE_AWSREGION_KEY, "eu-west-1");
-                  }
-                },
-                query));
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query, "streaming");
     StartJobRequest expected =
         new StartJobRequest(
             "TEST_CLUSTER:streaming:flint_my_glue_default_http_logs_elb_and_requesturi_index",
@@ -421,15 +380,7 @@ public class SparkQueryDispatcherTest {
     String query =
         "CREATE INDEX elb_and_requestUri ON my_glue.default.http_logs(l_orderkey, l_quantity) WITH"
             + " (auto_refresh = false)";
-    String sparkSubmitParameters =
-        constructExpectedSparkSubmitParameterString(
-            "sigv4",
-            new HashMap<>() {
-              {
-                put(FLINT_INDEX_STORE_AWSREGION_KEY, "eu-west-1");
-              }
-            },
-            query);
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query);
     StartJobRequest expected =
         new StartJobRequest(
             "TEST_CLUSTER:batch",
@@ -462,15 +413,7 @@ public class SparkQueryDispatcherTest {
     tags.put(CLUSTER_NAME_TAG_KEY, TEST_CLUSTER_NAME);
     tags.put(JOB_TYPE_TAG_KEY, JobType.BATCH.getText());
     String query = "source = my_glue.default.http_logs";
-    String sparkSubmitParameters =
-        constructExpectedSparkSubmitParameterString(
-            "sigv4",
-            new HashMap<>() {
-              {
-                put(FLINT_INDEX_STORE_AWSREGION_KEY, "eu-west-1");
-              }
-            },
-            query);
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query);
     StartJobRequest expected =
         new StartJobRequest(
             "TEST_CLUSTER:batch",
@@ -498,6 +441,77 @@ public class SparkQueryDispatcherTest {
   }
 
   @Test
+  void testDispatchWithSparkUDFQuery() {
+    List<String> udfQueries = new ArrayList<>();
+    udfQueries.add(
+        "CREATE FUNCTION celsius_to_fahrenheit AS 'org.apache.spark.sql.functions.expr(\"(celsius *"
+            + " 9/5) + 32\")'");
+    udfQueries.add(
+        "CREATE TEMPORARY FUNCTION square AS 'org.apache.spark.sql.functions.expr(\"num * num\")'");
+    for (String query : udfQueries) {
+      DataSourceMetadata dataSourceMetadata = constructMyGlueDataSourceMetadata();
+      when(dataSourceService.verifyDataSourceAccessAndGetRawMetadata(MY_GLUE))
+          .thenReturn(dataSourceMetadata);
+
+      IllegalArgumentException illegalArgumentException =
+          Assertions.assertThrows(
+              IllegalArgumentException.class,
+              () ->
+                  sparkQueryDispatcher.dispatch(
+                      getBaseDispatchQueryRequestBuilder(query).langType(LangType.SQL).build(),
+                      asyncQueryRequestContext));
+      Assertions.assertEquals(
+          "Query is not allowed: Creating user-defined functions is not allowed",
+          illegalArgumentException.getMessage());
+      verifyNoInteractions(emrServerlessClient);
+      verifyNoInteractions(flintIndexMetadataService);
+    }
+  }
+
+  @Test
+  void testInvalidSQLQueryDispatchToSpark() {
+    when(emrServerlessClientFactory.getClient(any())).thenReturn(emrServerlessClient);
+    HashMap<String, String> tags = new HashMap<>();
+    tags.put(DATASOURCE_TAG_KEY, MY_GLUE);
+    tags.put(CLUSTER_NAME_TAG_KEY, TEST_CLUSTER_NAME);
+    tags.put(JOB_TYPE_TAG_KEY, JobType.BATCH.getText());
+    String query = "myselect 1";
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query);
+    StartJobRequest expected =
+        new StartJobRequest(
+            "TEST_CLUSTER:batch",
+            null,
+            EMRS_APPLICATION_ID,
+            EMRS_EXECUTION_ROLE,
+            sparkSubmitParameters,
+            tags,
+            false,
+            "query_execution_result_my_glue");
+    when(emrServerlessClient.startJobRun(expected)).thenReturn(EMR_JOB_ID);
+    DataSourceMetadata dataSourceMetadata = constructMyGlueDataSourceMetadata();
+    when(dataSourceService.verifyDataSourceAccessAndGetRawMetadata(MY_GLUE))
+        .thenReturn(dataSourceMetadata);
+
+    DispatchQueryResponse dispatchQueryResponse =
+        sparkQueryDispatcher.dispatch(
+            DispatchQueryRequest.builder()
+                .applicationId(EMRS_APPLICATION_ID)
+                .query(query)
+                .datasource(MY_GLUE)
+                .langType(LangType.SQL)
+                .executionRoleARN(EMRS_EXECUTION_ROLE)
+                .clusterName(TEST_CLUSTER_NAME)
+                .sparkSubmitParameterModifier(sparkSubmitParameterModifier)
+                .build(),
+            asyncQueryRequestContext);
+
+    verify(emrServerlessClient, times(1)).startJobRun(startJobRequestArgumentCaptor.capture());
+    Assertions.assertEquals(expected, startJobRequestArgumentCaptor.getValue());
+    Assertions.assertEquals(EMR_JOB_ID, dispatchQueryResponse.getJobId());
+    verifyNoInteractions(flintIndexMetadataService);
+  }
+
+  @Test
   void testDispatchQueryWithoutATableAndDataSourceName() {
     when(emrServerlessClientFactory.getClient(any())).thenReturn(emrServerlessClient);
     HashMap<String, String> tags = new HashMap<>();
@@ -505,15 +519,7 @@ public class SparkQueryDispatcherTest {
     tags.put(CLUSTER_NAME_TAG_KEY, TEST_CLUSTER_NAME);
     tags.put(JOB_TYPE_TAG_KEY, JobType.BATCH.getText());
     String query = "show tables";
-    String sparkSubmitParameters =
-        constructExpectedSparkSubmitParameterString(
-            "sigv4",
-            new HashMap<>() {
-              {
-                put(FLINT_INDEX_STORE_AWSREGION_KEY, "eu-west-1");
-              }
-            },
-            query);
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query);
     StartJobRequest expected =
         new StartJobRequest(
             "TEST_CLUSTER:batch",
@@ -549,16 +555,7 @@ public class SparkQueryDispatcherTest {
     String query =
         "CREATE INDEX elb_and_requestUri ON default.http_logs(l_orderkey, l_quantity) WITH"
             + " (auto_refresh = true)";
-    String sparkSubmitParameters =
-        withStructuredStreaming(
-            constructExpectedSparkSubmitParameterString(
-                "sigv4",
-                new HashMap<>() {
-                  {
-                    put(FLINT_INDEX_STORE_AWSREGION_KEY, "eu-west-1");
-                  }
-                },
-                query));
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query, "streaming");
     StartJobRequest expected =
         new StartJobRequest(
             "TEST_CLUSTER:streaming:flint_my_glue_default_http_logs_elb_and_requesturi_index",
@@ -594,16 +591,7 @@ public class SparkQueryDispatcherTest {
     String query =
         "CREATE MATERIALIZED VIEW mv_1 AS query=select * from my_glue.default.logs WITH"
             + " (auto_refresh = true)";
-    String sparkSubmitParameters =
-        withStructuredStreaming(
-            constructExpectedSparkSubmitParameterString(
-                "sigv4",
-                new HashMap<>() {
-                  {
-                    put(FLINT_INDEX_STORE_AWSREGION_KEY, "eu-west-1");
-                  }
-                },
-                query));
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query, "streaming");
     StartJobRequest expected =
         new StartJobRequest(
             "TEST_CLUSTER:streaming:flint_mv_1",
@@ -636,15 +624,7 @@ public class SparkQueryDispatcherTest {
     tags.put(CLUSTER_NAME_TAG_KEY, TEST_CLUSTER_NAME);
     tags.put(JOB_TYPE_TAG_KEY, JobType.BATCH.getText());
     String query = "SHOW MATERIALIZED VIEW IN mys3.default";
-    String sparkSubmitParameters =
-        constructExpectedSparkSubmitParameterString(
-            "sigv4",
-            new HashMap<>() {
-              {
-                put(FLINT_INDEX_STORE_AWSREGION_KEY, "eu-west-1");
-              }
-            },
-            query);
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query);
     StartJobRequest expected =
         new StartJobRequest(
             "TEST_CLUSTER:batch",
@@ -677,15 +657,7 @@ public class SparkQueryDispatcherTest {
     tags.put(CLUSTER_NAME_TAG_KEY, TEST_CLUSTER_NAME);
     tags.put(JOB_TYPE_TAG_KEY, JobType.BATCH.getText());
     String query = "REFRESH SKIPPING INDEX ON my_glue.default.http_logs";
-    String sparkSubmitParameters =
-        constructExpectedSparkSubmitParameterString(
-            "sigv4",
-            new HashMap<>() {
-              {
-                put(FLINT_INDEX_STORE_AWSREGION_KEY, "eu-west-1");
-              }
-            },
-            query);
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query);
     StartJobRequest expected =
         new StartJobRequest(
             "TEST_CLUSTER:batch",
@@ -718,15 +690,7 @@ public class SparkQueryDispatcherTest {
     tags.put(CLUSTER_NAME_TAG_KEY, TEST_CLUSTER_NAME);
     tags.put(JOB_TYPE_TAG_KEY, JobType.BATCH.getText());
     String query = "DESCRIBE SKIPPING INDEX ON mys3.default.http_logs";
-    String sparkSubmitParameters =
-        constructExpectedSparkSubmitParameterString(
-            "sigv4",
-            new HashMap<>() {
-              {
-                put(FLINT_INDEX_STORE_AWSREGION_KEY, "eu-west-1");
-              }
-            },
-            query);
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query);
     StartJobRequest expected =
         new StartJobRequest(
             "TEST_CLUSTER:batch",
@@ -762,16 +726,7 @@ public class SparkQueryDispatcherTest {
     String query =
         "ALTER INDEX elb_and_requestUri ON my_glue.default.http_logs WITH"
             + " (auto_refresh = true)";
-    String sparkSubmitParameters =
-        withStructuredStreaming(
-            constructExpectedSparkSubmitParameterString(
-                "sigv4",
-                new HashMap<>() {
-                  {
-                    put(FLINT_INDEX_STORE_AWSREGION_KEY, "eu-west-1");
-                  }
-                },
-                query));
+    String sparkSubmitParameters = constructExpectedSparkSubmitParameterString(query, "streaming");
     StartJobRequest expected =
         new StartJobRequest(
             "TEST_CLUSTER:streaming:flint_my_glue_default_http_logs_elb_and_requesturi_index",
@@ -865,24 +820,6 @@ public class SparkQueryDispatcherTest {
 
     sparkQueryDispatcher.dispatch(getBaseDispatchQueryRequest(query), asyncQueryRequestContext);
     verify(queryHandlerFactory, times(1)).getIndexDMLHandler();
-  }
-
-  @Test
-  void testDispatchWithWrongURI() {
-    when(dataSourceService.verifyDataSourceAccessAndGetRawMetadata(MY_GLUE))
-        .thenReturn(constructMyGlueDataSourceMetadataWithBadURISyntax());
-    String query = "select * from my_glue.default.http_logs";
-
-    IllegalArgumentException illegalArgumentException =
-        Assertions.assertThrows(
-            IllegalArgumentException.class,
-            () ->
-                sparkQueryDispatcher.dispatch(
-                    getBaseDispatchQueryRequest(query), asyncQueryRequestContext));
-
-    Assertions.assertEquals(
-        "Bad URI in indexstore configuration of the : my_glue datasoure.",
-        illegalArgumentException.getMessage());
   }
 
   @Test
@@ -1111,71 +1048,46 @@ public class SparkQueryDispatcherTest {
     }
   }
 
-  private String constructExpectedSparkSubmitParameterString(
-      String auth, Map<String, String> authParams, String query) {
-    return constructExpectedSparkSubmitParameterString(auth, authParams, query, false);
+  private String constructExpectedSparkSubmitParameterString(String query) {
+    return constructExpectedSparkSubmitParameterString(query, null);
   }
 
-  private String constructExpectedSparkSubmitParameterString(
-      String auth, Map<String, String> authParams, String query, boolean lakeFormationEnabled) {
-    StringBuilder authParamConfigBuilder = new StringBuilder();
-    for (String key : authParams.keySet()) {
-      authParamConfigBuilder.append("  --conf ");
-      authParamConfigBuilder.append(key);
-      authParamConfigBuilder.append("=");
-      authParamConfigBuilder.append(authParams.get(key));
-    }
+  private String constructExpectedSparkSubmitParameterString(String query, String jobType) {
     query = "\"" + query + "\"";
-    return " --class org.apache.spark.sql.FlintJob  --conf"
-               + " spark.hadoop.fs.s3.customAWSCredentialsProvider=com.amazonaws.emr.AssumeRoleAWSCredentialsProvider"
-               + "  --conf"
-               + " spark.hadoop.aws.catalog.credentials.provider.factory.class=com.amazonaws.glue.catalog.metastore.STSAssumeRoleSessionCredentialsProviderFactory"
-               + "  --conf spark.jars=/usr/share/aws/iceberg/lib/iceberg-spark3-runtime.jar  --conf"
-               + " spark.jars.packages=org.opensearch:opensearch-spark-standalone_2.12:0.3.0-SNAPSHOT,org.opensearch:opensearch-spark-sql-application_2.12:0.3.0-SNAPSHOT,org.opensearch:opensearch-spark-ppl_2.12:0.3.0-SNAPSHOT"
-               + "  --conf"
-               + " spark.jars.repositories=https://aws.oss.sonatype.org/content/repositories/snapshots"
-               + "  --conf"
-               + " spark.emr-serverless.driverEnv.JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64/"
-               + "  --conf spark.executorEnv.JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64/"
-               + "  --conf spark.emr-serverless.driverEnv.FLINT_CLUSTER_NAME=TEST_CLUSTER  --conf"
-               + " spark.executorEnv.FLINT_CLUSTER_NAME=TEST_CLUSTER  --conf"
-               + " spark.datasource.flint.host=search-flint-dp-benchmark-cf5crj5mj2kfzvgwdeynkxnefy.eu-west-1.es.amazonaws.com"
-               + "  --conf spark.datasource.flint.port=-1  --conf"
-               + " spark.datasource.flint.scheme=https  --conf spark.datasource.flint.auth="
-        + auth
-        + "  --conf"
-        + " spark.datasource.flint.customAWSCredentialsProvider=com.amazonaws.emr.AssumeRoleAWSCredentialsProvider"
-        + "  --conf"
-        + " spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.opensearch.flint.spark.FlintSparkExtensions,org.opensearch.flint.spark.FlintPPLSparkExtensions"
-        + "  --conf"
-        + " spark.hadoop.hive.metastore.client.factory.class=com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory"
-        + "  --conf spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog "
-        + " --conf"
-        + " spark.sql.catalog.spark_catalog.catalog-impl=org.apache.iceberg.aws.glue.GlueCatalog "
-        + " --conf"
-        + " spark.emr-serverless.driverEnv.ASSUME_ROLE_CREDENTIALS_ROLE_ARN=arn:aws:iam::924196221507:role/FlintOpensearchServiceRole"
-        + "  --conf"
-        + " spark.executorEnv.ASSUME_ROLE_CREDENTIALS_ROLE_ARN=arn:aws:iam::924196221507:role/FlintOpensearchServiceRole"
-        + "  --conf"
-        + " spark.hive.metastore.glue.role.arn=arn:aws:iam::924196221507:role/FlintOpensearchServiceRole"
-        + "  --conf spark.sql.catalog.my_glue=org.opensearch.sql.FlintDelegatingSessionCatalog "
-        + " --conf spark.flint.datasource.name=my_glue  --conf"
-        + " spark.emr-serverless.lakeformation.enabled="
-        + Boolean.toString(lakeFormationEnabled)
-        + "  --conf spark.flint.optimizer.covering.enabled="
-        + Boolean.toString(!lakeFormationEnabled)
-        + authParamConfigBuilder
-        + "  --conf spark.flint.job.query="
-        + query
-        + " ";
+    return " --class org.apache.spark.sql.FlintJob "
+        + getConfParam(
+            "spark.hadoop.fs.s3.customAWSCredentialsProvider=com.amazonaws.emr.AssumeRoleAWSCredentialsProvider",
+            "spark.hadoop.aws.catalog.credentials.provider.factory.class=com.amazonaws.glue.catalog.metastore.STSAssumeRoleSessionCredentialsProviderFactory",
+            "spark.jars=/usr/share/aws/iceberg/lib/iceberg-spark3-runtime.jar",
+            "spark.jars.packages=org.opensearch:opensearch-spark-standalone_2.12:0.3.0-SNAPSHOT,org.opensearch:opensearch-spark-sql-application_2.12:0.3.0-SNAPSHOT,org.opensearch:opensearch-spark-ppl_2.12:0.3.0-SNAPSHOT",
+            "spark.jars.repositories=https://aws.oss.sonatype.org/content/repositories/snapshots",
+            "spark.emr-serverless.driverEnv.JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64/",
+            "spark.executorEnv.JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64/",
+            "spark.emr-serverless.driverEnv.FLINT_CLUSTER_NAME=TEST_CLUSTER",
+            "spark.executorEnv.FLINT_CLUSTER_NAME=TEST_CLUSTER",
+            "spark.datasource.flint.host=HOST",
+            "spark.datasource.flint.port=PORT",
+            "spark.datasource.flint.scheme=SCHEMA",
+            "spark.datasource.flint.auth=basic",
+            "spark.datasource.flint.customAWSCredentialsProvider=com.amazonaws.emr.AssumeRoleAWSCredentialsProvider",
+            "spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.opensearch.flint.spark.FlintSparkExtensions,org.opensearch.flint.spark.FlintPPLSparkExtensions",
+            "spark.hadoop.hive.metastore.client.factory.class=com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+            "spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog",
+            "spark.sql.catalog.spark_catalog.catalog-impl=org.apache.iceberg.aws.glue.GlueCatalog")
+        + getConfParam("spark.flint.job.query=" + query)
+        + (jobType != null ? getConfParam("spark.flint.job.type=" + jobType) : "")
+        + getConfParam(
+            KEY_FROM_DATASOURCE_COMPOSER + "=" + VALUE_FROM_DATASOURCE_COMPOSER,
+            KEY_FROM_COMPOSER + "=" + VALUE_FROM_COMPOSER);
   }
 
-  private String withStructuredStreaming(String parameters) {
-    return parameters + " --conf spark.flint.job.type=streaming ";
+  private String getConfParam(String... params) {
+    return Arrays.stream(params)
+        .map(param -> String.format(" --conf %s ", param))
+        .collect(Collectors.joining());
   }
 
   private DataSourceMetadata constructMyGlueDataSourceMetadata() {
-
     Map<String, String> properties = new HashMap<>();
     properties.put("glue.auth.type", "iam_role");
     properties.put(
@@ -1203,37 +1115,6 @@ public class SparkQueryDispatcherTest {
     properties.put("glue.indexstore.opensearch.auth", "basicauth");
     properties.put("glue.indexstore.opensearch.auth.username", "username");
     properties.put("glue.indexstore.opensearch.auth.password", "password");
-    return new DataSourceMetadata.Builder()
-        .setName(MY_GLUE)
-        .setConnector(DataSourceType.S3GLUE)
-        .setProperties(properties)
-        .build();
-  }
-
-  private DataSourceMetadata constructMyGlueDataSourceMetadataWithNoAuth() {
-    Map<String, String> properties = new HashMap<>();
-    properties.put("glue.auth.type", "iam_role");
-    properties.put(
-        "glue.auth.role_arn", "arn:aws:iam::924196221507:role/FlintOpensearchServiceRole");
-    properties.put(
-        "glue.indexstore.opensearch.uri",
-        "https://search-flint-dp-benchmark-cf5crj5mj2kfzvgwdeynkxnefy.eu-west-1.es.amazonaws.com");
-    properties.put("glue.indexstore.opensearch.auth", "noauth");
-    return new DataSourceMetadata.Builder()
-        .setName(MY_GLUE)
-        .setConnector(DataSourceType.S3GLUE)
-        .setProperties(properties)
-        .build();
-  }
-
-  private DataSourceMetadata constructMyGlueDataSourceMetadataWithBadURISyntax() {
-    Map<String, String> properties = new HashMap<>();
-    properties.put("glue.auth.type", "iam_role");
-    properties.put(
-        "glue.auth.role_arn", "arn:aws:iam::924196221507:role/FlintOpensearchServiceRole");
-    properties.put("glue.indexstore.opensearch.uri", "http://localhost:9090? param");
-    properties.put("glue.indexstore.opensearch.auth", "awssigv4");
-    properties.put("glue.indexstore.opensearch.region", "eu-west-1");
     return new DataSourceMetadata.Builder()
         .setName(MY_GLUE)
         .setConnector(DataSourceType.S3GLUE)
@@ -1287,8 +1168,7 @@ public class SparkQueryDispatcherTest {
       String query, LangType langType, String extraParameters) {
     return getBaseDispatchQueryRequestBuilder(query)
         .langType(langType)
-        .sparkSubmitParameterModifier(
-            (parameters) -> parameters.setExtraParameters(extraParameters))
+        .sparkSubmitParameterModifier((builder) -> builder.extraParameters(extraParameters))
         .build();
   }
 

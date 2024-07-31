@@ -29,6 +29,8 @@ jobs:
       fail-fast: false
       matrix:
         java: [21]
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     runs-on: ubuntu-latest
     container:
       # using the same image which is used by opensearch-build team to build the OpenSearch Distribution
@@ -36,10 +38,6 @@ jobs:
       image: ${{ needs.Get-CI-Image-Tag.outputs.ci-image-version-linux }}
       # need to switch to root so that github actions can install runner binary on container without permission issues.
       options: --user root
-
-    # Allow using Node16 actions
-    env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
     - uses: actions/checkout@v3
@@ -107,6 +105,7 @@ jobs:
       matrix:
         entry:
           - { os: windows-latest, java: 21, os_build_args: -x doctest -PbuildPlatform=windows }
+          - { os: macos-13, java: 21 }
     runs-on: ${{ matrix.entry.os }}
 
     steps:
